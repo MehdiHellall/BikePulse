@@ -1,0 +1,10 @@
+{
+  "last_updated": 1786311600,
+  "ttl": 86400,
+  "data": {
+    "stations": [
+      {"station_id": "1", "name": "Alpha", "lat": 48.8566, "lon": 2.3522, "capacity": 20},
+      {"station_id": "2", "name": "Beta", "lat": 48.8570, "lon": 2.3500, "capacity": 20}
+    ]
+  }
+}
