@@ -44,13 +44,6 @@ The replay is not a second modeling project. It is a visual surface over stored 
 - PostgreSQL, Kafka, Airflow, or a feature store.
 - Mobile application.
 
-### Explicit removals
-
-- No simulated trips.
-- No claim to observe real origin–destination trips.
-- No automatically generated causal explanations.
-- No model metric obtained from random row splits.
-
 Scope changes require removing or deferring an item of similar size.
 
 ## 3. Technology decisions

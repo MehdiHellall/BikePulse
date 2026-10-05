@@ -44,3 +44,26 @@ def test_information_fixture_normalizes_to_station_dimension_rows(fixture_dir) -
     assert not batch.errors
     assert batch.rows[0].station_id == "1"
     assert batch.rows[0].capacity == 20
+
+
+def test_current_vendor_aliases_and_numeric_station_ids_are_normalized() -> None:
+    payload = {
+        "lastUpdatedOther": 1791224671,
+        "ttl": 60,
+        "data": {
+            "stations": [
+                {
+                    "station_id": 213688169,
+                    "name": "Benjamin Godard - Victor Hugo",
+                    "lat": 48.865983,
+                    "lon": 2.275725,
+                    "capacity": 35,
+                }
+            ]
+        },
+    }
+
+    batch = normalize_information_payload(payload)
+
+    assert not batch.errors
+    assert batch.rows[0].station_id == "213688169"

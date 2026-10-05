@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
+from pydantic import AliasChoices, BaseModel, ConfigDict, Field, ValidationError, field_validator
 
 
 class RecordError(BaseModel):
@@ -24,6 +24,11 @@ class StationStatusRecord(BaseModel):
     num_docks_available: int = Field(ge=0)
     last_reported: int = Field(ge=0)
 
+    @field_validator("station_id", mode="before")
+    @classmethod
+    def station_id_as_string(cls, value: object) -> str:
+        return str(value)
+
 
 class StationInformationRecord(BaseModel):
     model_config = ConfigDict(extra="allow")
@@ -34,9 +39,17 @@ class StationInformationRecord(BaseModel):
     lon: float = Field(ge=-180, le=180)
     capacity: int = Field(ge=0)
 
+    @field_validator("station_id", mode="before")
+    @classmethod
+    def station_id_as_string(cls, value: object) -> str:
+        return str(value)
+
 
 class GbfsPayload(BaseModel):
-    last_updated: int = Field(ge=0)
+    last_updated: int = Field(
+        ge=0,
+        validation_alias=AliasChoices("last_updated", "lastUpdatedOther"),
+    )
     ttl: int = Field(ge=0)
     data: dict[str, Any]
 

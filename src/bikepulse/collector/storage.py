@@ -19,6 +19,7 @@ class StoredSnapshot:
     collected_at_utc: datetime
     path: Path
     content_sha256: str
+    received_at_utc: datetime | None = None
 
 
 def snapshot_id(kind: SnapshotKind, collected_at_utc: datetime, content_sha256: str) -> str:
@@ -69,6 +70,7 @@ def store_snapshot(
     payload: dict[str, Any],
     content_sha256: str,
     content: bytes | None = None,
+    received_at_utc: datetime | None = None,
 ) -> StoredSnapshot:
     snap_id = snapshot_id(kind, collected_at_utc, content_sha256)
     path = raw_snapshot_path(data_dir, kind, collected_at_utc, snap_id)
@@ -81,6 +83,7 @@ def store_snapshot(
         collected_at_utc=collected_at_utc,
         path=path,
         content_sha256=content_sha256,
+        received_at_utc=received_at_utc,
     )
 
 
@@ -105,6 +108,7 @@ def write_poll_record(
         "snapshot_id": stored.snapshot_id,
         "kind": stored.kind,
         "collected_at_utc": stored.collected_at_utc.isoformat(),
+        "received_at_utc": (stored.received_at_utc.isoformat() if stored.received_at_utc else None),
         "url": url,
         "path": str(stored.path),
         "content_sha256": stored.content_sha256,

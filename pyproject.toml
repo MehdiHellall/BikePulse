@@ -13,9 +13,13 @@ dependencies = [
   "duckdb>=1.0",
   "httpx>=0.27",
   "polars>=1.5",
+  "pydeck>=0.9",
   "pyarrow>=16.1",
   "pydantic>=2.8",
   "streamlit>=1.37",
+  "scikit-learn>=1.5",
+  "joblib>=1.4",
+  "numpy>=1.26",
 ]
 
 [project.optional-dependencies]
@@ -26,6 +30,9 @@ dev = [
   "ruff>=0.5",
   "mypy>=1.11",
   "pip-audit>=2.7",
+  "build>=1.2",
+  "hatchling>=1.25",
+  "pytest-playwright>=0.7",
 ]
 
 [project.scripts]
@@ -43,8 +50,11 @@ target-version = "py312"
 select = ["E", "F", "I", "N", "UP", "B", "A", "C4", "SIM", "RUF"]
 
 [tool.pytest.ini_options]
-addopts = "--cov=bikepulse --cov-report=term-missing --cov-fail-under=80"
+addopts = "-ra --cov=bikepulse --cov-report=term-missing --cov-fail-under=80"
 testpaths = ["tests"]
+markers = [
+  "e2e: browser tests that require Playwright and a local Streamlit server",
+]
 
 [tool.coverage.run]
 omit = [

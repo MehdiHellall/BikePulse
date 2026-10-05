@@ -17,6 +17,7 @@ from bikepulse.config import AppSettings
 def collect_status_once(settings: AppSettings, client: GbfsClient) -> StoredSnapshot:
     collected_at = datetime.now(UTC)
     result = client.fetch_json(str(settings.gbfs.status_url))
+    received_at = datetime.now(UTC)
     stored = store_snapshot(
         data_dir=settings.paths.data_dir,
         kind="status",
@@ -24,9 +25,10 @@ def collect_status_once(settings: AppSettings, client: GbfsClient) -> StoredSnap
         payload=result.payload,
         content_sha256=result.content_sha256,
         content=result.content,
+        received_at_utc=received_at,
     )
     batch = normalize_status_payload(
-        result.payload, snapshot_id=stored.snapshot_id, collected_at_utc=collected_at
+        result.payload, snapshot_id=stored.snapshot_id, collected_at_utc=received_at
     )
     write_poll_record(
         data_dir=settings.paths.data_dir,
@@ -45,6 +47,7 @@ def collect_status_once(settings: AppSettings, client: GbfsClient) -> StoredSnap
 def refresh_stations_once(settings: AppSettings, client: GbfsClient) -> StoredSnapshot:
     collected_at = datetime.now(UTC)
     result = client.fetch_json(str(settings.gbfs.information_url))
+    received_at = datetime.now(UTC)
     stored = store_snapshot(
         data_dir=settings.paths.data_dir,
         kind="information",
@@ -52,13 +55,14 @@ def refresh_stations_once(settings: AppSettings, client: GbfsClient) -> StoredSn
         payload=result.payload,
         content_sha256=result.content_sha256,
         content=result.content,
+        received_at_utc=received_at,
     )
     batch = normalize_information_payload(result.payload)
     rows = [row for row in batch.rows if isinstance(row, NormalizedInformation)]
     refresh_station_dimension(
         data_dir=settings.paths.data_dir,
         rows=rows,
-        observed_at_utc=collected_at,
+        observed_at_utc=received_at,
     )
     write_poll_record(
         data_dir=settings.paths.data_dir,
