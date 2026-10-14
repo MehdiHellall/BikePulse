@@ -11,6 +11,7 @@ import pytest
 from bikepulse.collector.schemas import NormalizedInformation
 from bikepulse.collector.stations import refresh_station_dimension
 from bikepulse.collector.storage import store_snapshot, write_poll_record
+from bikepulse.ml.readiness import build_readiness_report, write_daily_readiness_report
 from bikepulse.ml.study import choose_threshold, predict_station, run_study
 
 START = datetime(2026, 8, 1, tzinfo=UTC)
@@ -79,6 +80,8 @@ def test_full_raw_to_model_study_is_reproducible_and_predicts(study_history: Pat
     assert report["status"] == "complete"
     assert report["logistic_regression"]["row_count"] == report["inventory_baseline"]["row_count"]
     assert report["logistic_regression"]["average_precision"] > 0
+    assert report["config"]["feature_schema_version"] == "empty-poc-v2-feed-observation"
+    assert report["config"]["freshness_basis"] == "published feed update and local receipt time"
     assert (output / "model.joblib").exists()
     first = pl.read_parquet(output / "test_predictions.parquet")
     again = run_study(study_history, START, end)
@@ -111,6 +114,24 @@ def test_empty_history_reports_blocker_and_does_not_fabricate_model(tmp_path: Pa
     assert predict_station(tmp_path, "1", now=START)["status"] == "unavailable"
     with pytest.raises(ValueError, match="14"):
         run_study(tmp_path, START, START + timedelta(days=13))
+    future = datetime.now(UTC).replace(hour=0, minute=0, second=0, microsecond=0) + timedelta(
+        days=1
+    )
+    with pytest.raises(ValueError, match="completed"):
+        run_study(tmp_path, future, future + timedelta(days=14))
+
+
+def test_readiness_reports_complete_positive_and_negative_windows(study_history: Path) -> None:
+    report = build_readiness_report(study_history, START, START + timedelta(days=1))
+
+    assert report["status"] == "labels_forming"
+    assert report["complete_label_count"] > 0
+    assert report["positive_label_count"] > 0
+    assert report["negative_label_count"] > 0
+    assert report["feed_fresh_row_count"] > report["station_fresh_row_count"] - 1
+    output = write_daily_readiness_report(study_history, START.date())
+    assert output == study_history / "ml/readiness/daily/2026-08-01.md"
+    assert output.exists()
 
 
 def test_threshold_uses_f1_and_breaks_ties_with_precision() -> None:

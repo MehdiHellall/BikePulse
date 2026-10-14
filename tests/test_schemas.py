@@ -21,6 +21,7 @@ def test_valid_status_fixture_normalizes_to_contract(fixture_dir) -> None:
     assert first.available_bikes == 7
     assert first.mechanical_bikes == 5
     assert first.electric_bikes == 2
+    assert first.feed_updated_at_utc == datetime(2026, 8, 9, 21, 40, tzinfo=UTC)
     assert first.data_age_seconds == 60
 
 

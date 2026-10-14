@@ -6,6 +6,7 @@ import os
 
 from bikepulse.config import load_settings
 from bikepulse.ml.dataset import utc_midnight
+from bikepulse.ml.readiness import write_rolling_readiness_report
 from bikepulse.ml.study import predict_station, run_study
 
 
@@ -18,6 +19,8 @@ def main() -> None:
     study.add_argument("--end", required=True)
     predict = commands.add_parser("predict")
     predict.add_argument("--station-id", required=True)
+    readiness = commands.add_parser("readiness")
+    readiness.add_argument("--hours", required=True, type=int, choices=(24, 48))
     commands.add_parser("report")
     args = parser.parse_args()
     settings = load_settings(args.config)
@@ -27,7 +30,8 @@ def main() -> None:
                 settings.paths.data_dir,
                 utc_midnight(args.start),
                 utc_midnight(args.end),
-                max_age_seconds=settings.collection.max_station_age_seconds,
+                max_feed_age_seconds=settings.collection.max_feed_age_seconds,
+                max_station_age_seconds=settings.collection.max_station_age_seconds,
             )
             print((output / "report.md").read_text())
             print(f"Artifacts: {output}")
@@ -37,11 +41,20 @@ def main() -> None:
                     predict_station(
                         settings.paths.data_dir,
                         args.station_id,
-                        max_age_seconds=settings.collection.max_station_age_seconds,
+                        max_feed_age_seconds=settings.collection.max_feed_age_seconds,
                     ),
                     indent=2,
                 )
             )
+        elif args.command == "readiness":
+            output = write_rolling_readiness_report(
+                settings.paths.data_dir,
+                args.hours,
+                max_feed_age_seconds=settings.collection.max_feed_age_seconds,
+                max_station_age_seconds=settings.collection.max_station_age_seconds,
+            )
+            print(output.read_text())
+            print(f"Artifact: {output}")
         else:
             latest = settings.paths.data_dir / "ml" / "latest.json"
             if not latest.exists():

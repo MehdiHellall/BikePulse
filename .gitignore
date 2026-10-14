@@ -1,12 +1,19 @@
+# Local environments
 .venv/
 .tools/
+
+# Python and tool caches
 __pycache__/
+*.pyc
 .pytest_cache/
 .mypy_cache/
 .ruff_cache/
 .cache/
 .coverage
 htmlcov/
+
+# Build output
 dist/
+
+# Runtime observations and generated experiments
 /data/
-*.pyc

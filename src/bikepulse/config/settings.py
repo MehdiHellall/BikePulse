@@ -30,6 +30,7 @@ class GbfsSettings(BaseModel):
 
 class CollectionSettings(BaseModel):
     max_station_age_seconds: int = Field(gt=0, le=3600)
+    max_feed_age_seconds: int = Field(default=300, gt=0, le=3600)
     expected_interval_minutes: int = Field(gt=0, le=60)
     daily_station_refresh_hour_utc: int = Field(ge=0, le=23)
 

@@ -11,6 +11,7 @@ from bikepulse.config import load_settings
 from bikepulse.data.compaction import load_history, rebuild_history
 from bikepulse.data.quality import build_daily_quality_report
 from bikepulse.io import atomic_write_text
+from bikepulse.ml.readiness import write_rolling_readiness_report
 
 SERVICE = "bikepulse-collector.service"
 
@@ -63,15 +64,33 @@ def main() -> None:
                         data_dir=settings.paths.data_dir,
                         day=day,
                         max_station_age_seconds=settings.collection.max_station_age_seconds,
+                        max_feed_age_seconds=settings.collection.max_feed_age_seconds,
                     ),
                     indent=2,
                 )
             )
         history = load_history(settings.paths.data_dir, now - timedelta(hours=48), now)
-        fresh = history.filter(
+        station_fresh = history.filter(
             history["data_age_seconds"] <= settings.collection.max_station_age_seconds
         ).height
-        print(f"48h audit: {history.height} observations; {fresh} fresh at receipt.")
+        feed_age = history["received_at_utc"] - history["feed_updated_at_utc"]
+        feed_fresh = history.filter(
+            history["feed_updated_at_utc"].is_not_null()
+            & (feed_age.dt.total_seconds() >= 0)
+            & (feed_age.dt.total_seconds() <= settings.collection.max_feed_age_seconds)
+        ).height
+        print(
+            f"48h audit: {history.height} observations; {feed_fresh} feed-fresh; "
+            f"{station_fresh} station-fresh."
+        )
+        readiness = write_rolling_readiness_report(
+            settings.paths.data_dir,
+            48,
+            now=now,
+            max_feed_age_seconds=settings.collection.max_feed_age_seconds,
+            max_station_age_seconds=settings.collection.max_station_age_seconds,
+        )
+        print(readiness.read_text())
         print(f"Logs: journalctl --user -u {SERVICE} -n 50")
 
 

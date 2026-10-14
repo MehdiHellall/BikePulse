@@ -16,7 +16,7 @@ FEATURES = [
     "hour_cos",
     "weekend",
 ]
-FEATURE_SCHEMA_VERSION = "empty-poc-v1"
+FEATURE_SCHEMA_VERSION = "empty-poc-v2-feed-observation"
 GRID_SCHEMA: dict[str, pl.DataType | type[pl.DataType]] = {
     **OBSERVATION_SCHEMA,
     "as_of_utc": pl.Datetime("us", "UTC"),
@@ -29,7 +29,7 @@ def canonical_grid(
     start: datetime,
     end: datetime,
     *,
-    max_age_seconds: int = 300,
+    max_feed_age_seconds: int = 300,
 ) -> pl.DataFrame:
     """Select the latest whole snapshot known at each boundary, never a future poll."""
     proven = history.filter(pl.col("received_at_utc").is_not_null())
@@ -61,13 +61,13 @@ def canonical_grid(
         .filter(pl.col("snapshot_id").is_not_null())
     )
     grid = chosen.join(proven, on="snapshot_id", how="inner")
-    age = (
-        pl.col("as_of_utc") - pl.col("station_last_reported_utc")
+    feed_age = (
+        pl.col("as_of_utc") - pl.col("feed_updated_at_utc")
     ).dt.total_microseconds() / 1_000_000
     return grid.with_columns(
         (
-            (age >= 0)
-            & (age <= max_age_seconds)
+            (feed_age >= 0)
+            & (feed_age <= max_feed_age_seconds)
             & (pl.col("received_at_utc") >= pl.col("collected_at_utc"))
             & pl.col("is_installed")
             & pl.col("is_renting")

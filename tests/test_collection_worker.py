@@ -53,6 +53,12 @@ def test_worker_refreshes_once_and_survives_compaction_failure(
     )
     monkeypatch.setattr(worker, "compact_status_hour", lambda *args: None)
     monkeypatch.setattr(worker, "build_daily_quality_report", lambda **kwargs: {})
+    readiness_calls = []
+    monkeypatch.setattr(
+        worker,
+        "refresh_readiness_reports",
+        lambda _settings, days: readiness_calls.append(days) or set(days),
+    )
     sleeps = []
 
     def sleep(seconds):
@@ -64,6 +70,8 @@ def test_worker_refreshes_once_and_survives_compaction_failure(
     with pytest.raises(KeyboardInterrupt):
         worker.run_worker(settings_config)
     assert calls == [True, False]
+    assert len(readiness_calls) == 1
+    assert len(readiness_calls[0]) == 2
 
     def broken(*args):
         raise RuntimeError("disk failure")

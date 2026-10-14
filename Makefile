@@ -2,7 +2,9 @@ PYTHON ?= python3.12
 UV_ENV ?= .tools/uv
 UV := $(UV_ENV)/bin/uv
 
-.PHONY: setup run check smoke verify format collect-start collect-status collect-stop ml-poc ml-predict ml-report
+.PHONY: setup run check smoke verify format clean
+.PHONY: collect-start collect-status collect-stop
+.PHONY: ml-poc ml-predict ml-report ml-readiness
 
 $(UV):
 	$(PYTHON) -m venv $(UV_ENV)
@@ -11,6 +13,7 @@ $(UV):
 setup: $(UV)
 	$(UV) sync --locked --extra dev
 
+# Development
 run:
 	.venv/bin/streamlit run src/bikepulse/app/main.py --server.headless=true
 
@@ -32,6 +35,12 @@ format:
 	.venv/bin/ruff format .
 	.venv/bin/ruff check --fix .
 
+clean:
+	rm -rf .cache .mypy_cache .pytest_cache .ruff_cache dist htmlcov
+	rm -f .coverage
+	find src tests -type d -name __pycache__ -prune -exec rm -rf {} +
+
+# Collector service
 collect-start:
 	.venv/bin/python -m bikepulse.collector.manage start
 
@@ -41,6 +50,7 @@ collect-status:
 collect-stop:
 	.venv/bin/python -m bikepulse.collector.manage stop
 
+# Offline ML study
 ml-poc:
 	.venv/bin/python -m bikepulse.ml.cli study --start "$(START)" --end "$(END)"
 
@@ -49,3 +59,6 @@ ml-predict:
 
 ml-report:
 	.venv/bin/python -m bikepulse.ml.cli report
+
+ml-readiness:
+	.venv/bin/python -m bikepulse.ml.cli readiness --hours "$(HOURS)"

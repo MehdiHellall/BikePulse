@@ -1,101 +1,115 @@
 # BikePulse
 
-BikePulse is a local Streamlit proof of concept for exploring current Vélib’ station availability across Greater Paris. It loads the official GBFS feeds, displays every valid station on a PyDeck map, and supports station search, bike/dock modes, and station details.
+BikePulse is a Python 3.12 proof of concept for exploring current Vélib’ station
+availability and evaluating whether a station with bikes will be observed empty
+within the next 30 minutes.
 
-The live-map scope is in `POC_PLAN.md`. The offline empty-bike ML study is in
-`ML_PLAN.md`; live forecast integration and replay remain on the roadmap in `MVP_PLAN.md`.
+The repository currently contains two working paths:
 
-## Setup
+- a local Streamlit map backed by the official GBFS feeds;
+- an offline collector and reproducible logistic-regression study backed by local history.
 
-Install Python 3.12 with virtual-environment support, then use these commands:
+Live forecast display and replay are planned work. See the [documentation index](docs/README.md)
+for the implemented contracts, operating guide, audits, and plans.
+
+## Quick start
+
+Install Python 3.12 with virtual-environment support, then run:
 
 ```bash
 make setup
 make run
 ```
 
-`make setup` installs `uv` into the repository-local `.tools/uv` environment and
-creates `.venv` from the committed lockfile. It does not modify the system Python.
-Open the local URL printed by Streamlit.
+`make setup` installs `uv` under `.tools/` and creates `.venv` from `uv.lock`. It
+does not modify the system Python. The app reads `config.example.toml` by default;
+select another file with `BIKEPULSE_CONFIG=/path/to/config.toml make run`.
 
-## Run the station map
+The map displays all valid geocoded stations, supports bike and dock modes, and
+provides station search and details. Failed refreshes retain the last successful
+snapshot, label it clearly, and suppress normal availability colors.
 
-The app reads `config.example.toml` by default. To use another configuration:
+## Project layout
 
-```bash
-BIKEPULSE_CONFIG=/path/to/config.toml make run
+```text
+src/bikepulse/
+  app/        Streamlit map and view model
+  collector/  GBFS client, validation, storage, and user service
+  config/     typed TOML settings
+  data/       raw-to-Parquet compaction and quality reports
+  ml/         labels, features, readiness, study, and prediction
+tests/        controlled fixtures, unit/integration tests, and browser smoke test
+docs/         architecture, contracts, operations, plans, and dated audits
+data/         ignored runtime observations and generated ML artifacts
 ```
 
-The status feed is cached for 60 seconds and station information for 24 hours. The app refreshes while it is open. A failed refresh preserves the last successful snapshot, labels it clearly, and disables normal availability colors.
+The detailed layout and data flow are in [Architecture](docs/architecture.md).
 
-## Verify the prototype
+## Running collection experiment
+
+The collector runs independently of the map as a manually started Linux user
+service and polls every five minutes:
+
+```bash
+make collect-start
+make collect-status
+journalctl --user -u bikepulse-collector.service -n 50
+```
+
+It writes immutable raw responses, poll receipts, rebuildable Parquet partitions,
+quality reports, and daily label-readiness reports under ignored `data/`. Laptop
+sleep, shutdown, and connectivity loss create explicit gaps. After a reboot, start
+the service manually.
+
+The current experiment is active. Status checks, log reads, tests, documentation
+edits, and readiness reports can run without stopping it. The full operating and
+recovery procedure is in [Operations](docs/operations.md).
+
+## Label readiness and model study
+
+The ML path treats a station count as observed when a recently updated feed is
+received. Feed update time and local receipt must be no more than 300 seconds old
+at the canonical boundary. The per-station `last_reported` timestamp remains a
+diagnostic and continues to drive freshness on the live map.
+
+Check whether complete positive and negative label windows are forming:
+
+```bash
+make ml-readiness HOURS=24
+make ml-readiness HOURS=48
+```
+
+The earliest preliminary 14-day window reusing the 12–13 October observations
+ends on 26 October 2026. Run it after `2026-10-26 00:00 UTC`, provided each
+chronological partition contains both label classes:
+
+```bash
+make ml-poc START=2026-10-12 END=2026-10-26
+make ml-report
+make ml-predict STATION_ID=48800374
+```
+
+Results are preliminary, research only, and uncalibrated. The complete target,
+split, feature, and claim rules are in the [ML POC plan](docs/plans/ml-poc.md) and
+[data contract](docs/data-contract.md).
+
+## Verification
 
 ```bash
 make verify
 ```
 
-This runs formatting, lint, type checks, unit and app tests, the dependency audit,
-the package build, and the Playwright browser smoke test. For a faster check that
-does not install Chromium, run:
+This runs formatting, lint, strict type checks, tests with coverage, the dependency
+audit, package build, and Playwright smoke test. Use `make check` when Chromium is
+unavailable. Tests use controlled local fixtures and never call the public feed.
 
-```bash
-make check
-```
+## Data guarantees
 
-Tests use controlled local feeds and never call the public GBFS service.
+- Missing bike or dock counts remain unknown and never become zero.
+- Raw snapshots are immutable; derived Parquet partitions are rebuildable.
+- Receipt, feed publication, and station report times remain separate.
+- Collection gaps invalidate affected label windows instead of creating negatives.
+- Synthetic tests establish engineering behavior, not real model quality.
 
-## Offline empty-bike ML POC
-
-Start real collection independently of the map:
-
-```bash
-make setup
-make collect-start
-make collect-status
-```
-
-The manually started Linux user service polls every five minutes. It saves raw
-responses, receipt times, failures, hourly Parquet, and quality reports under
-`data/`. It pauses while the laptop sleeps or shuts down. After reboot, run
-`make collect-start` again. Stop with `make collect-stop`. Read logs with
-`journalctl --user -u bikepulse-collector.service -n 50`.
-
-Inspect the first 48 hours of freshness before expecting usable training data.
-The provider previously returned old station timestamps; fresh downloads do not
-make those stations fresh. The 300-second station-age rule remains enforced.
-
-After collecting 14 days, choose a UTC date range where END is exclusive and
-exactly 14 days after START. For collection starting 5 October 2026:
-
-```bash
-make ml-poc START=2026-10-05 END=2026-10-19
-make ml-report
-make ml-predict STATION_ID=48800374
-```
-
-The study builds eight features, trains standardized logistic regression, and
-compares it with `1/(bikes+1)` on the same test rows. The split is eight training
-days, three validation days, and three test days, with 30-minute boundary purging.
-Model thresholds use validation F1; the inventory cutoff is fixed at three bikes.
-No test labels are used for fitting or threshold selection.
-
-Reports, manifests, test predictions, and the model are in
-`data/ml/experiments/<run_id>/`. Dataset/source fingerprints identify the experiment.
-Fitting is capped at one million reproducibly sampled training rows for laptop
-memory; evaluation uses all eligible test rows. Results are **preliminary,
-research only, and uncalibrated**. Missing or single-class data yields an
-`insufficient_data` report and no model. Predictions use collected observations
-only and report unavailable for missing, stale, inactive, or insufficient-history
-inputs. Already-empty stations return **Empty now**.
-
-`make verify` exercises the full raw-to-model path on synthetic test fixtures,
-including serialization and prediction. These fixtures are not real-data evidence.
-
-## Troubleshooting
-
-- **`externally-managed-environment`:** do not use `--break-system-packages`; run `make setup`, which installs tools inside local virtual environments.
-- **The map reports that live data is unavailable:** verify internet access and both URLs in the selected TOML file, then use **Try again**.
-- **All points are grey:** check the feed timestamp. Data older than `max_station_age_seconds` is intentionally marked stale.
-- **Map tiles do not load:** station data can still be valid; the CARTO base map requires network access in the browser.
-- **Collection will not start:** a Linux user systemd session is required; inspect `systemctl --user status bikepulse-collector.service`.
-- **ML reports insufficient data:** inspect `make collect-status`; all six future observations and the exact 15-minute lag must be usable. Collect longer if a partition lacks positive or negative examples.
+The [13 October collection audit](docs/audits/2026-10-13-collection.md) records the
+observed gaps, timestamp diagnosis, hand-checked labels, and first readiness result.

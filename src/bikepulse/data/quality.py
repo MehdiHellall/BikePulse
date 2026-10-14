@@ -17,6 +17,7 @@ def build_daily_quality_report(
     data_dir: Path,
     day: date,
     max_station_age_seconds: int = 300,
+    max_feed_age_seconds: int = 300,
     expected_interval_minutes: int = 5,
 ) -> dict[str, Any]:
     start = datetime.combine(day, datetime.min.time(), UTC)
@@ -24,7 +25,14 @@ def build_daily_quality_report(
     frame = load_history(data_dir, start, end)
     snapshots = frame.select("snapshot_id", "collected_at_utc", "received_at_utc").unique()
     interval_seconds = expected_interval_minutes * 60
-    known_at = snapshots.select(
+    # A poll just before midnight supplies the next day's 00:00 grid slot.
+    # Keep daily row counts scoped to the day, but include that prior poll for gap coverage.
+    coverage_snapshots = (
+        load_history(data_dir, start - timedelta(seconds=interval_seconds), end)
+        .select("snapshot_id", "collected_at_utc", "received_at_utc")
+        .unique()
+    )
+    known_at = coverage_snapshots.select(
         pl.coalesce("received_at_utc", "collected_at_utc").alias("known_at")
     )["known_at"].to_list()
     actual = {ceil((t - start).total_seconds() / interval_seconds) for t in known_at}
@@ -54,7 +62,16 @@ def build_daily_quality_report(
             )
             gap_start = None
     counts = frame.group_by("snapshot_id").len()["len"].to_list()
-    stale = frame.filter(pl.col("data_age_seconds") > max_station_age_seconds).height
+    station_stale = frame.filter(pl.col("data_age_seconds") > max_station_age_seconds).height
+    feed_age = (
+        pl.col("received_at_utc") - pl.col("feed_updated_at_utc")
+    ).dt.total_microseconds() / 1_000_000
+    feed_invalid = frame.filter(
+        pl.col("received_at_utc").is_null()
+        | pl.col("feed_updated_at_utc").is_null()
+        | (feed_age < 0)
+        | (feed_age > max_feed_age_seconds)
+    ).height
     missing_receipt = frame.filter(pl.col("received_at_utc").is_null()).height
     schema_errors = sum(
         json.loads(path.read_text())["schema_error_count"]
@@ -63,7 +80,8 @@ def build_daily_quality_report(
     warnings = []
     for condition, warning in [
         (bool(gaps), "collection_gaps"),
-        (stale > 0, "stale_station_data"),
+        (station_stale > 0, "stale_station_data"),
+        (feed_invalid > 0, "stale_or_invalid_feed_data"),
         (len(set(counts)) > 1, "station_count_drift"),
         (schema_errors > 0, "schema_validation_errors"),
         (missing_receipt > 0, "missing_receipt_times"),
@@ -81,8 +99,13 @@ def build_daily_quality_report(
         "expected_poll_count": slots,
         "observed_slot_count": len(actual),
         "row_count": frame.height,
-        "stale_row_count": stale,
-        "fresh_row_count": frame.height - stale,
+        # Retain these names for report compatibility; they describe station age.
+        "stale_row_count": station_stale,
+        "fresh_row_count": frame.height - station_stale,
+        "station_stale_row_count": station_stale,
+        "station_fresh_row_count": frame.height - station_stale,
+        "feed_stale_or_invalid_row_count": feed_invalid,
+        "feed_fresh_row_count": frame.height - feed_invalid,
         "missing_receipt_count": missing_receipt,
         "schema_error_count": schema_errors,
         "failed_poll_count": sum(

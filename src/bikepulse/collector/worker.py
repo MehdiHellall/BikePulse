@@ -5,7 +5,7 @@ import json
 import logging
 import shutil
 import time
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 from typing import Literal
 
@@ -14,6 +14,7 @@ from bikepulse.config import AppSettings, load_settings
 from bikepulse.data.compaction import compact_status_hour
 from bikepulse.data.quality import build_daily_quality_report
 from bikepulse.io import atomic_write_text
+from bikepulse.ml.readiness import write_daily_readiness_report
 
 LOG = logging.getLogger(__name__)
 
@@ -50,12 +51,32 @@ def collect_cycle(settings: AppSettings, *, refresh_information: bool) -> bool:
     return information_ok
 
 
+def refresh_readiness_reports(settings: AppSettings, days: list[date]) -> set[date]:
+    completed: set[date] = set()
+    for day in days:
+        try:
+            output = write_daily_readiness_report(
+                settings.paths.data_dir,
+                day,
+                max_feed_age_seconds=settings.collection.max_feed_age_seconds,
+                max_station_age_seconds=settings.collection.max_station_age_seconds,
+            )
+            LOG.info("Wrote ML readiness report: %s", output)
+            completed.add(day)
+        except Exception:
+            LOG.exception("ML readiness rebuild failed for %s; raw snapshots are preserved", day)
+    return completed
+
+
 def run_worker(config: Path) -> None:
     settings = load_settings(config)
     if settings.collection.expected_interval_minutes != 5:
         raise ValueError("ML POC collection requires a five-minute interval")
     refreshed_day = None
     compacted_hour = None
+    readiness_days: set[date] = set()
+    required_readiness_days: set[date] = set()
+    readiness_backfill_attempted = False
     while True:
         now = datetime.now(UTC)
         if collect_cycle(settings, refresh_information=refreshed_day != now.date()):
@@ -68,10 +89,19 @@ def run_worker(config: Path) -> None:
                     data_dir=settings.paths.data_dir,
                     day=(now - timedelta(days=1)).date(),
                     max_station_age_seconds=settings.collection.max_station_age_seconds,
+                    max_feed_age_seconds=settings.collection.max_feed_age_seconds,
                 )
                 compacted_hour = hour
             except Exception:
                 LOG.exception("History/quality rebuild failed; raw snapshots are preserved")
+            yesterday = now.date() - timedelta(days=1)
+            required_readiness_days.add(yesterday)
+            if not readiness_backfill_attempted:
+                required_readiness_days.add(now.date() - timedelta(days=2))
+                readiness_backfill_attempted = True
+            pending_readiness = sorted(required_readiness_days - readiness_days)
+            if pending_readiness:
+                readiness_days.update(refresh_readiness_reports(settings, pending_readiness))
         time.sleep(seconds_until_poll(datetime.now(UTC)))
 
 

@@ -33,6 +33,7 @@ def quality_report_main() -> None:
                 data_dir=settings.paths.data_dir,
                 day=date.fromisoformat(args.day),
                 max_station_age_seconds=settings.collection.max_station_age_seconds,
+                max_feed_age_seconds=settings.collection.max_feed_age_seconds,
                 expected_interval_minutes=settings.collection.expected_interval_minutes,
             ),
             indent=2,

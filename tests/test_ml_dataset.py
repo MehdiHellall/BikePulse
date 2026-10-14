@@ -24,6 +24,7 @@ def history_at(times: list[datetime], counts: list[int], station_id: str = "1") 
             "station_id": station_id,
             "collected_at_utc": t - timedelta(seconds=10),
             "received_at_utc": t - timedelta(seconds=5),
+            "feed_updated_at_utc": t - timedelta(seconds=10),
             "station_last_reported_utc": t - timedelta(seconds=10),
             "data_age_seconds": 5,
             "is_installed": True,
@@ -67,11 +68,11 @@ def test_grid_uses_receipt_not_request_time_and_excludes_legacy() -> None:
     assert canonical_grid(legacy, START, START + timedelta(minutes=5)).is_empty()
 
 
-def test_freshness_boundaries_and_unknown_metadata() -> None:
+def test_feed_freshness_boundaries_and_unknown_metadata() -> None:
     history = history_at([START], [2])
     for age, usable in [(300, True), (300.001, False), (301, False)]:
         altered = history.with_columns(
-            pl.lit(START - timedelta(seconds=age)).alias("station_last_reported_utc")
+            pl.lit(START - timedelta(seconds=age)).alias("feed_updated_at_utc")
         )
         assert (
             row_at(canonical_grid(altered, START, START + timedelta(minutes=5)))["usable"] is usable
@@ -80,6 +81,25 @@ def test_freshness_boundaries_and_unknown_metadata() -> None:
     assert not row_at(canonical_grid(unknown, START, START + timedelta(minutes=5)))["usable"]
     with pytest.raises(ValueError, match="duplicate"):
         canonical_grid(pl.concat([history, history]), START, START + timedelta(minutes=5))
+
+
+def test_old_station_timestamp_does_not_invalidate_fresh_published_count() -> None:
+    history = history_at([START], [2]).with_columns(
+        pl.lit(START - timedelta(hours=1)).alias("station_last_reported_utc")
+    )
+
+    assert row_at(canonical_grid(history, START, START + timedelta(minutes=5)))["usable"]
+
+
+def test_missing_or_future_feed_timestamp_is_unusable() -> None:
+    history = history_at([START], [2])
+    missing = history.with_columns(
+        pl.lit(None, dtype=pl.Datetime("us", "UTC")).alias("feed_updated_at_utc")
+    )
+    future = history.with_columns(pl.lit(START + timedelta(seconds=1)).alias("feed_updated_at_utc"))
+
+    assert not row_at(canonical_grid(missing, START, START + timedelta(minutes=5)))["usable"]
+    assert not row_at(canonical_grid(future, START, START + timedelta(minutes=5)))["usable"]
 
 
 def test_labels_require_every_future_even_after_observed_zero() -> None:

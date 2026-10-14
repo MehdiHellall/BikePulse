@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import copy
 import json
-from datetime import UTC, date, datetime
+from datetime import UTC, date, datetime, timedelta
 
 import polars as pl
 import pytest
@@ -10,7 +10,7 @@ from conftest import load_json
 
 from bikepulse.collector.schemas import normalize_information_payload
 from bikepulse.collector.stations import refresh_station_dimension
-from bikepulse.collector.storage import store_snapshot
+from bikepulse.collector.storage import store_snapshot, write_poll_record
 
 compaction = pytest.importorskip(
     "bikepulse.data.compaction",
@@ -22,6 +22,7 @@ quality = pytest.importorskip(
 )
 CompactionContractError = compaction.CompactionContractError
 compact_status_hour = compaction.compact_status_hour
+load_history = compaction.load_history
 build_daily_quality_report = quality.build_daily_quality_report
 
 
@@ -48,6 +49,26 @@ def test_compaction_is_idempotent_and_joins_station_dimension(fixture_dir, tmp_p
     key_counts = first.group_by(["snapshot_id", "station_id"]).len()
     assert key_counts["len"].max() == 1
     assert first.filter(pl.col("station_id") == "1")["capacity"].item() == 20
+
+
+def test_legacy_parquet_without_feed_timestamp_is_loaded_as_ineligible(
+    fixture_dir, tmp_path
+) -> None:
+    collected = datetime(2026, 8, 9, 21, 0, tzinfo=UTC)
+    store_snapshot(
+        data_dir=tmp_path,
+        kind="status",
+        collected_at_utc=collected,
+        payload=load_json(fixture_dir / "gbfs_status_valid.json"),
+        content_sha256="8" * 64,
+    )
+    frame = compact_status_hour(tmp_path, collected)
+    output = compaction.partition_path(tmp_path, collected)
+    frame.drop("feed_updated_at_utc").write_parquet(output)
+
+    loaded = load_history(tmp_path, collected, collected + timedelta(hours=1))
+
+    assert loaded["feed_updated_at_utc"].null_count() == loaded.height
 
 
 def test_silver_compaction_uses_metadata_valid_at_observation_time(fixture_dir, tmp_path) -> None:
@@ -114,6 +135,8 @@ def test_quality_report_exposes_gaps_staleness_and_station_drift(fixture_dir, tm
     assert "collection_gaps" in report["warnings"]
     assert "stale_station_data" in report["warnings"]
     assert "station_count_drift" in report["warnings"]
+    assert "feed_fresh_row_count" in report
+    assert "station_fresh_row_count" in report
     assert report["storage_bytes"] > 0
 
 
@@ -143,6 +166,41 @@ def test_quality_report_exposes_sparse_day_boundary_gaps(fixture_dir, tmp_path) 
     assert report["gap_count"] == 2
     assert report["gaps"][0]["start_utc"] == "2026-08-09T00:00:00+00:00"
     assert "collection_gaps" in report["warnings"]
+
+
+def test_quality_report_counts_prior_day_poll_for_midnight_slot(fixture_dir, tmp_path) -> None:
+    payload = load_json(fixture_dir / "gbfs_status_valid.json")
+    for collected, content_hash in [
+        (datetime(2026, 8, 9, 23, 59, 30, tzinfo=UTC), "a" * 64),
+        (datetime(2026, 8, 10, 0, 4, 30, tzinfo=UTC), "b" * 64),
+    ]:
+        stored = store_snapshot(
+            data_dir=tmp_path,
+            kind="status",
+            collected_at_utc=collected,
+            received_at_utc=collected + timedelta(seconds=1),
+            payload=payload,
+            content_sha256=content_hash,
+        )
+        write_poll_record(
+            data_dir=tmp_path,
+            stored=stored,
+            url="http://fixture/status",
+            latency_ms=1,
+            attempts=1,
+            status_code=200,
+            valid_record_count=2,
+            error_count=0,
+            error_codes=[],
+        )
+    for hour in (datetime(2026, 8, 9, 23, tzinfo=UTC), datetime(2026, 8, 10, tzinfo=UTC)):
+        compact_status_hour(tmp_path, hour)
+
+    report = build_daily_quality_report(data_dir=tmp_path, day=date(2026, 8, 10))
+
+    assert report["snapshot_count"] == 1
+    assert report["observed_slot_count"] == 2
+    assert report["gaps"][0]["start_utc"] == "2026-08-10T00:10:00+00:00"
 
 
 def test_compaction_fails_on_duplicate_observation_keys(fixture_dir, tmp_path) -> None:

@@ -1,5 +1,9 @@
 # Vélib Stockout Predictor — MVP execution plan
 
+This is the future product roadmap. The implemented system is documented in
+[Architecture](../architecture.md), [Current data contract](../data-contract.md),
+and [Operations](../operations.md).
+
 ## 1. MVP outcome
 
 Deliver one deployed application with two tightly connected modes:
@@ -118,6 +122,8 @@ Primary key: `(snapshot_id, station_id)`.
 ```text
 snapshot_id
 collected_at_utc
+received_at_utc
+feed_updated_at_utc
 station_id
 station_last_reported_utc
 data_age_seconds
@@ -135,7 +141,10 @@ longitude
 
 ### Target eligibility
 
-A row at canonical time `t` is eligible only when the station is installed, renting, returning, has positive capacity, has station age at or below 300 seconds, and has all six fresh/active future observations at `t+5, …, t+30`.
+A row at canonical time `t` is eligible only when the station is installed, renting,
+returning, has positive capacity, was received in the preceding five minutes, has
+a feed publication age at or below 300 seconds, and has all six usable future
+observations at `t+5, …, t+30`. Per-station report age remains a separate diagnostic.
 
 ```text
 empty target: bikes_t > 0 and bikes reach 0 in one of the next six rows
@@ -176,6 +185,8 @@ mechanical_bikes
 electric_bikes
 available_docks
 capacity
+source_received_at_utc
+feed_updated_at_utc
 data_age_seconds
 station_last_reported_utc
 empty_probability
@@ -421,7 +432,7 @@ Deliverable: one deterministic command rebuilds a modeling dataset for a date ra
 ```text
 current bikes, docks, capacity, and inventory ratios
 mechanical/electric counts
-data age
+feed age and station-report age diagnostic
 5/15/30/60-minute lags and changes
 30/60-minute rolling mean, min, max, and standard deviation
 15/30-minute slope
@@ -514,7 +525,7 @@ Use a red-green-refactor loop for each deterministic module. Tests should descri
 | Contract | Freeze file and model interfaces | observation, prediction, manifest, evaluation, and resolved-outcome schema compatibility |
 | Integration | Prove stage handoffs | GBFS → raw → Parquet; Parquet → grid → dataset; artifact → scorer; prediction → resolver → replay query |
 | End-to-end | Protect the two user paths | live map opens and station is inspectable; replay time changes and outcome evidence agrees |
-| Failure-mode | Ensure honest degradation | unavailable feed, truncated raw file, stale station, incomplete horizon, old prediction, schema mismatch |
+| Failure-mode | Ensure honest degradation | unavailable feed, truncated raw file, stale feed, incomplete horizon, old prediction, schema mismatch |
 
 Coverage gate: at least 80% for deterministic core modules. UI line coverage is less useful than a few strong behavioral tests. No test should call the live feed.
 
@@ -672,7 +683,7 @@ These are engineering gates, not model-performance claims.
 | History is too short | Few positive events or unstable metrics | Start collection first; show counts and intervals; keep report preliminary | Wait for more data; do not invent a result |
 | Collection gaps corrupt targets | Falling valid-label rate or gaps over 10 minutes | Strict null labels, quality report, durable scheduler, backups | Exclude affected windows and fix collection before tuning |
 | Feed/schema drift | Parser failures or sudden station-count change | Preserve raw payloads, validate boundaries, alert on drift | Fail closed and add a versioned normalizer |
-| Station timestamps are stale | Fresh polls but old per-station reports | Track feed receipt and station age separately | Suppress affected station predictions |
+| Feed and station timestamps diverge | Fresh feed publications but old per-station reports | Keep receipt, feed publication, and station report age separate | Gate predictions on feed/receipt freshness and expose station age as a diagnostic |
 | Model only learns inventory | LightGBM barely beats inventory baseline | Keep features small and compare on identical rows | Deploy the baseline for that target |
 | Probabilities are misleading | Reliability curve deviates materially | Temporal calibration and Brier/log-loss gate | Show risk rank/band only until calibrated |
 | Rare events distort accuracy | High accuracy with poor event recall | Use average precision, lift@20, event recall, and alert episodes | Never use accuracy as the headline metric |
@@ -740,7 +751,7 @@ The MVP is complete only when all of the following are true:
 
 - Five-minute collection is durable, monitored, and recoverable.
 - Raw snapshots are immutable; processed partitions are idempotently rebuildable.
-- Station metadata changes and per-station freshness are represented explicitly.
+- Station metadata changes and receipt, feed, and station timestamps are represented explicitly.
 - Quality and valid-label rates are reported for the evaluation period.
 
 #### Modeling

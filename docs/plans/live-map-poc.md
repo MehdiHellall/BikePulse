@@ -4,7 +4,8 @@
 
 The current proof of concept is a local Streamlit application for exploring current Vélib’ station availability. It displays the official station network, supports bike and dock availability modes, lets users search or click a station, and explains stale or unavailable data.
 
-Machine learning, forecasts, replay, historical charts, deployment, and route planning remain in `MVP_PLAN.md`.
+The offline empty-bike study is specified in [ml-poc.md](ml-poc.md). Forecasts,
+replay, historical charts, deployment, and route planning remain in [mvp.md](mvp.md).
 
 ## Delivery slices
 

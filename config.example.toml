@@ -11,5 +11,6 @@ backoff_seconds = 0.5
 
 [collection]
 max_station_age_seconds = 300
+max_feed_age_seconds = 300
 expected_interval_minutes = 5
 daily_station_refresh_hour_utc = 3

@@ -64,6 +64,7 @@ class GbfsPayload(BaseModel):
 class NormalizedStatus(BaseModel):
     snapshot_id: str
     collected_at_utc: datetime
+    feed_updated_at_utc: datetime
     station_id: str
     station_last_reported_utc: datetime
     data_age_seconds: int
@@ -102,6 +103,7 @@ def normalize_status_payload(
     payload: dict[str, Any], *, snapshot_id: str, collected_at_utc: datetime
 ) -> NormalizedBatch:
     gbfs = GbfsPayload.model_validate(payload)
+    feed_updated_at = unix_to_utc(gbfs.last_updated)
     rows: list[NormalizedStatus] = []
     errors: list[RecordError] = []
     for raw in gbfs.data["stations"]:
@@ -113,6 +115,7 @@ def normalize_status_payload(
                 NormalizedStatus(
                     snapshot_id=snapshot_id,
                     collected_at_utc=collected_at_utc,
+                    feed_updated_at_utc=feed_updated_at,
                     station_id=record.station_id,
                     station_last_reported_utc=last_reported,
                     data_age_seconds=max(

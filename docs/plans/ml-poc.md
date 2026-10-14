@@ -8,14 +8,14 @@ logistic-regression model, preliminary report, and station prediction command.
 Collect 14 calendar days on the Linux laptop. Review budget: six hours per week.
 
 Keep map forecast integration, dock prediction, LightGBM, calibration, replay,
-weather, and automatic retraining for later work. MVP_PLAN.md remains the roadmap.
+weather, and automatic retraining for later work. [mvp.md](mvp.md) remains the roadmap.
 
 ## Data and target
 
 The user service polls every five minutes, 30 seconds before the UTC boundary.
 It refreshes station information at startup and daily. It preserves raw JSON.gz,
-receipt timestamps, station report timestamps, and failure records. Laptop sleep,
-shutdown, or loss of connectivity creates explicit gaps.
+feed update timestamps, receipt timestamps, station report timestamps, and failure
+records. Laptop sleep, shutdown, or loss of connectivity creates explicit gaps.
 
 At each canonical boundary, use the latest whole snapshot already received, at
 most five minutes earlier. Metadata joins use the version known at receipt time.
@@ -23,14 +23,16 @@ Raw history without receipt timestamps is retained for diagnostics but excluded
 from modeling. Hourly bronze/silver Parquet is rebuildable.
 
 A starting station must have bikes, positive capacity, enabled installation/rental/
-return flags, and station age at most 300 seconds. Every future observation at
-+5 through +30 minutes must be usable. Label 1 when at least one is empty, otherwise
-0. Any unusable future makes the label null, even after an observed zero.
-Already-empty stations are excluded. Missing counts never mean zero.
+return flags, and a published feed update no more than 300 seconds old. The snapshot
+must also have been received in the preceding five minutes. Every future observation
+at +5 through +30 minutes must be usable. Label 1 when at least one is empty,
+otherwise 0. Any unusable future makes the label null, even after an observed zero.
+Already-empty stations are excluded. Missing counts never mean zero. Per-station
+`last_reported` age remains a diagnostic and does not invalidate a changing count.
 
-Inspect freshness during the first 48 hours with make collect-status. If fresh
-windows remain unavailable, investigate the provider and report insufficient data.
-Never loosen freshness to manufacture training examples.
+Inspect label readiness after 24 and 48 hours with `make ml-readiness HOURS=24`
+and `HOURS=48`. If complete windows remain unavailable, investigate the feed and
+report insufficient data. The readiness report keeps feed and station age separate.
 
 ## Features and model
 
@@ -69,6 +71,7 @@ make collect-stop. Restart collection manually after reboot; no boot service
 is enabled. After 14 days:
 
     make ml-poc START=YYYY-MM-DD END=YYYY-MM-DD
+    make ml-readiness HOURS=48
     make ml-report
     make ml-predict STATION_ID=48800374
     make verify

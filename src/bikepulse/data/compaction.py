@@ -17,6 +17,7 @@ OBSERVATION_SCHEMA: dict[str, pl.DataType | type[pl.DataType]] = {
     "snapshot_id": pl.String,
     "collected_at_utc": UTC_TIME,
     "received_at_utc": UTC_TIME,
+    "feed_updated_at_utc": UTC_TIME,
     "station_id": pl.String,
     "station_last_reported_utc": UTC_TIME,
     "data_age_seconds": pl.Int64,
@@ -153,7 +154,12 @@ def load_history(data_dir: Path, start: datetime, end: datetime) -> pl.DataFrame
     if not files:
         return pl.DataFrame(schema=OBSERVATION_SCHEMA)
     return (
-        pl.scan_parquet(files)
+        pl.scan_parquet(
+            files,
+            schema=pl.Schema(OBSERVATION_SCHEMA),
+            missing_columns="insert",
+            extra_columns="ignore",
+        )
         .filter((pl.col("collected_at_utc") >= start) & (pl.col("collected_at_utc") < end))
         .collect()
     )

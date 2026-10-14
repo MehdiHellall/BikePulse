@@ -2,7 +2,7 @@
 
 ## Project Structure & Module Organization
 
-Application code lives in `src/bikepulse/`: `collector/` ingests GBFS, `config/` loads TOML settings, `app/` contains the Streamlit map, `data/` rebuilds history, and `ml/` implements the offline empty-bike study. Tests and captured responses live in `tests/` and `tests/fixtures/`. Follow `POC_PLAN.md` and `ML_PLAN.md`; `MVP_PLAN.md` is the longer roadmap. Generated artifacts belong under ignored root `data/`.
+Application code lives in `src/bikepulse/`: `collector/` ingests GBFS, `config/` loads TOML settings, `app/` contains the Streamlit map, `data/` rebuilds history, and `ml/` implements the offline empty-bike study. Tests and captured responses live in `tests/` and `tests/fixtures/`. Current architecture, contracts, and operations are indexed in `docs/README.md`; delivery plans live in `docs/plans/`. Generated artifacts belong under ignored root `data/`.
 
 ## Build, Test, and Development Commands
 

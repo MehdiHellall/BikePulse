@@ -57,6 +57,7 @@ def test_load_settings_resolves_relative_data_dir(tmp_path) -> None:
 
     assert settings.paths.data_dir == (tmp_path / "pipeline-data").resolve()
     assert settings.collection.max_station_age_seconds == 300
+    assert settings.collection.max_feed_age_seconds == 300
 
 
 def test_service_collects_status_snapshot(fixture_dir, tmp_path, monkeypatch) -> None:

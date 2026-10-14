@@ -91,7 +91,8 @@ def run_study(
     start: datetime,
     end: datetime,
     *,
-    max_age_seconds: int = 300,
+    max_feed_age_seconds: int = 300,
+    max_station_age_seconds: int = 300,
 ) -> Path:
     if (
         start.utcoffset() != timedelta(0)
@@ -102,11 +103,14 @@ def run_study(
         or end - start != timedelta(days=14)
     ):
         raise ValueError("Choose exactly 14 UTC days; END is exclusive (START + 14 days).")
+    if end > datetime.now(UTC):
+        raise ValueError("END must be a completed UTC date; future observations are unavailable.")
     rebuild_history(data_dir, start - timedelta(minutes=20), end)
     work = data_dir / "ml" / "datasets" / f"{start:%Y-%m-%d}_{end:%Y-%m-%d}"
     dataset_digest = hashlib.sha256()
     quality: list[dict[str, Any]] = []
     excluded_legacy = 0
+    missing_feed_timestamp_rows = 0
     files = []
     for offset in range(14):
         day = start + timedelta(days=offset)
@@ -119,11 +123,16 @@ def run_study(
             & (pl.col("collected_at_utc") < day + timedelta(days=1))
             & pl.col("received_at_utc").is_null()
         ).height
+        missing_feed_timestamp_rows += history.filter(
+            (pl.col("collected_at_utc") >= day)
+            & (pl.col("collected_at_utc") < day + timedelta(days=1))
+            & pl.col("feed_updated_at_utc").is_null()
+        ).height
         grid = canonical_grid(
             history,
             day - timedelta(minutes=15),
             day + timedelta(days=1, minutes=30),
-            max_age_seconds=max_age_seconds,
+            max_feed_age_seconds=max_feed_age_seconds,
         )
         dataset = (
             partition_dataset(build_dataset(grid), start)
@@ -136,7 +145,10 @@ def run_study(
         dataset_digest.update(path.read_bytes())
         quality.append(
             build_daily_quality_report(
-                data_dir=data_dir, day=day.date(), max_station_age_seconds=max_age_seconds
+                data_dir=data_dir,
+                day=day.date(),
+                max_station_age_seconds=max_station_age_seconds,
+                max_feed_age_seconds=max_feed_age_seconds,
             )
         )
     config = {
@@ -150,7 +162,9 @@ def run_study(
         "seed": 42,
         "max_iter": 1000,
         "threshold_rule": "validation F1 maximum, ties by precision then threshold",
-        "max_station_age_seconds": max_age_seconds,
+        "freshness_basis": "published feed update and local receipt time",
+        "max_feed_age_seconds": max_feed_age_seconds,
+        "max_station_age_seconds_diagnostic": max_station_age_seconds,
         "max_training_rows": TRAINING_LIMIT,
         "dataset_sha256": dataset_digest.hexdigest(),
         "source_sha256": _source_fingerprint(),
@@ -172,15 +186,16 @@ def run_study(
     )
     report: dict[str, Any] = {
         "status": "insufficient_data",
-        "claim": "preliminary; research only; uncalibrated",
+        "claim": "published-feed stockout; preliminary; research only; uncalibrated",
         "run_id": run_id,
         "config": config,
         "partition_counts": summary.to_dicts(),
         "excluded_legacy_rows": excluded_legacy,
+        "missing_feed_timestamp_rows": missing_feed_timestamp_rows,
         "collection_quality": quality,
         "limitation": (
-            "Observed five-minute stockouts only; complete fresh windows are required. "
-            "Short history and laptop gaps limit generalization."
+            "Stockouts are observed in fresh published-feed snapshots, not at the station sensor. "
+            "Complete five-minute windows are required; laptop gaps limit generalization."
         ),
     }
     sets = {
@@ -253,11 +268,12 @@ def run_study(
         "",
         f"Status: **{report['status']}**",
         "",
-        "Preliminary research results. Probabilities are not calibrated.",
+        "Preliminary published-feed stockout results. Probabilities are not calibrated.",
         "",
         f"UTC period: {start.date()} through {end.date()} (end exclusive).",
         "",
         f"Legacy rows excluded: {excluded_legacy}.",
+        f"Rows missing a feed update timestamp: {missing_feed_timestamp_rows}.",
         "",
         "## Dataset",
         "",
@@ -301,7 +317,7 @@ def predict_station(
     station_id: str,
     *,
     now: datetime | None = None,
-    max_age_seconds: int = 300,
+    max_feed_age_seconds: int = 300,
 ) -> dict[str, Any]:
     now = (now or datetime.now(UTC)).astimezone(UTC)
     boundary = now.replace(second=0, microsecond=0, minute=(now.minute // 5) * 5)
@@ -313,7 +329,7 @@ def predict_station(
         history,
         boundary - timedelta(minutes=15),
         boundary + timedelta(minutes=5),
-        max_age_seconds=max_age_seconds,
+        max_feed_age_seconds=max_feed_age_seconds,
     )
     current = feature_rows(grid).filter(
         (pl.col("station_id") == station_id) & (pl.col("as_of_utc") == boundary)
@@ -325,10 +341,10 @@ def predict_station(
     }
     if current.is_empty():
         return {**result, "reason": "missing or old collected observation"}
-    # Even an already-empty station must be fresh at the actual invocation time.
-    age = (now - current["station_last_reported_utc"].item()).total_seconds()
+    # Even an already-empty station must come from a fresh feed at invocation time.
+    feed_age = (now - current["feed_updated_at_utc"].item()).total_seconds()
     source_age = (now - current["received_at_utc"].item()).total_seconds()
-    if age > max_age_seconds or source_age > 300:
+    if feed_age < 0 or feed_age > max_feed_age_seconds or source_age > max_feed_age_seconds:
         return {**result, "reason": "observation became stale since boundary"}
     rejection = current["feature_rejection"].item()
     if rejection == "already_empty":
@@ -354,7 +370,7 @@ def predict_station(
     artifact = joblib.load(io.BytesIO(binary))
     if artifact["features"] != FEATURES or artifact["schema_version"] != FEATURE_SCHEMA_VERSION:
         return {**result, "reason": "model feature schema mismatch"}
-    if report["config"]["max_station_age_seconds"] != max_age_seconds:
+    if report["config"].get("max_feed_age_seconds") != max_feed_age_seconds:
         return {**result, "reason": "model freshness configuration mismatch"}
     probability = float(_score(artifact["model"], current)[0])
     return {
@@ -367,6 +383,7 @@ def predict_station(
         "run_id": report["run_id"],
         "source_snapshot_id": current["snapshot_id"].item(),
         "received_at_utc": current["received_at_utc"].item().isoformat(),
+        "feed_updated_at_utc": current["feed_updated_at_utc"].item().isoformat(),
         "station_last_reported_utc": current["station_last_reported_utc"].item().isoformat(),
-        "claim": "research only; preliminary; uncalibrated",
+        "claim": "published-feed stockout; research only; preliminary; uncalibrated",
     }
