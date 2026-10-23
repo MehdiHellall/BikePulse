@@ -5,6 +5,10 @@
 The experiment uses a manually started systemd user service. It is intentionally
 independent of the Streamlit process.
 
+Collection was frozen at `2026-10-15T07:29:30.349112+00:00`; the service was confirmed
+inactive during the [23 October project audit](audits/2026-10-23-project.md).
+Start it only for an intentional new collection window.
+
 ```bash
 make collect-start
 make collect-status
@@ -73,6 +77,89 @@ make ml-poc START=2026-10-12 END=2026-10-26
 
 Run it after `2026-10-26 00:00 UTC`. Retain coverage gaps and readiness warnings in
 the interpretation of the result.
+
+## Frozen partial dataset
+
+After stopping collection, export all complete labels through the last stored status receipt:
+
+```bash
+make ml-dataset
+```
+
+To reproduce a previous export, pass its exact UTC receipt cutoff:
+
+```bash
+make ml-dataset CUTOFF=2026-10-15T07:29:30.349112+00:00
+```
+
+The command writes a full dataset at observed prevalence, a training-only 1:9 enriched
+sample, and provenance and quality reports under `data/ml/exports/<run_id>/`. Missing
+collection intervals remain gaps. Validation and test data are never resampled.
+
+## Frozen model study
+
+Prepare a reproducible offline study from a verified frozen export, then run its selected
+stages. The commands never fetch the public feed.
+
+```bash
+make ml-frozen-prepare EXPORT_ID=5d53d536cfc4304a
+make ml-frozen-study STUDY_ID=9c00dbb1f375405f MODE=smoke
+make ml-frozen-study STUDY_ID=9c00dbb1f375405f MODE=full
+make ml-frozen-report STUDY_ID=9c00dbb1f375405f
+make ml-frozen-lock STUDY_ID=9c00dbb1f375405f CANDIDATE=hist_core
+make ml-frozen-test STUDY_ID=9c00dbb1f375405f
+make ml-frozen-replay STUDY_ID=9c00dbb1f375405f STATION_ID=54001024 AS_OF=2026-10-14T07:40:00Z
+make ml-frozen-package STUDY_ID=9c00dbb1f375405f
+```
+
+Artifacts live under `data/ml/frozen_studies/<study_id>/`. `frozen-test` requires a
+recorded selection and uses the saved validation threshold. It evaluates no deployment
+target. The release package contains the selected model, reports, checksums, and a
+prediction-reproduction check.
+
+These commands describe the original execution sequence. The final test has already
+been evaluated; use `ml-frozen-report` to inspect its results. New managed studies move
+forward through `prepared`, validation complete, `locked`, test complete, and `packaged`.
+Smoke fitting is optional before locking. Each completed stage has an immutable manifest
+under `stages/` that binds its request, prerequisites, and output checksums.
+
+Repeating the exact request verifies those manifests and returns the existing result
+without fitting, scoring, changing state, or rewriting files. A conflicting selection,
+changed evidence, or out-of-order command fails. Once locked, candidates cannot be fitted
+again or changed. Final-test execution records `stages/test_attempt.json` before scoring;
+if the process is interrupted, automatic rescoring remains blocked so an operator can
+inspect and preserve the incomplete attempt. A per-study filesystem lock rejects
+concurrent mutations.
+
+Studies created before stage manifests are legacy evidence. Their reports and historical
+replay remain readable, but mutation commands fail because the lifecycle prerequisites
+cannot be verified. Do not retrofit stage manifests or regenerate their model, selection,
+test, or package artifacts.
+
+## Temporal research cache
+
+New temporal-study runs store feature caches under `data/ml/temporal_cache/v2/`. A cache
+identity covers the frozen export manifest, every consumed development-history partition,
+station metadata, transformation settings and source, Python, and relevant installed
+dependencies. The adjacent manifest records the complete provenance, Parquet checksum,
+schema, row count, and time bounds.
+
+Reuse requires the manifest and Parquet file to agree and the data to have the expected
+columns and dtypes, unique station-time keys, and development-only bounds. Missing,
+obsolete, incomplete, or corrupt cache pairs are rebuilt atomically with the reason
+recorded in the new manifest and study report. Existing pre-v2 caches and recorded studies
+are retained as historical artifacts.
+
+## Session housekeeping
+
+Inspect `git status --short` and the latest project audit before editing. Existing
+untracked research code, tests, experiment configuration, reports, and published plots
+are work to preserve. Use `make clean` to remove disposable tool/build artifacts;
+it keeps `.venv/`, `.tools/`, and all of `data/`.
+
+Dependency advisories can change between sessions. The findings in the 23 October project
+audit were remediated later that day; the dated remediation record documents the resolved
+versions and verification. Continue to require the live `pip-audit` in `make verify`.
 
 ## Recovery
 

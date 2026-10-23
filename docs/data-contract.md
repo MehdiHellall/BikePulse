@@ -56,6 +56,7 @@ data/
 └── ml/
     ├── readiness/{daily,rolling}/
     ├── datasets/
+    ├── exports/
     └── experiments/
 ```
 
@@ -96,3 +97,42 @@ The current feature contract is `empty-poc-v2-feed-observation`. A successful
 manifest, and test predictions under `data/ml/experiments/<run_id>/`. Single-class
 or insufficient partitions write an explicit `insufficient_data` report and no
 model artifact.
+
+## Frozen partial-data export
+
+The frozen export uses the last stored receipt as its default cutoff and verifies each raw
+status snapshot against the checksum in its poll record. `full_labeled.parquet` contains
+all complete labels at the observed class prevalence. `enriched_train.parquet` contains
+all positive training rows and nine deterministically sampled negative rows per positive.
+Validation and test rows remain only in the full dataset. `sources.json` records every
+snapshot ID, receipt time, and verified content hash used by the export.
+
+Geographic columns include station coordinates, station count and capacity within one
+kilometre, and the absolute 15-minute bike-count movement of usable neighboring stations.
+The movement field is a cycling-activity proxy that can include operator rebalancing; it
+is not a ride count. The export preserves collection gaps and never fills missing labels.
+
+## Frozen model study
+
+`data/ml/frozen_studies/<study_id>/` contains a protocol that hashes the verified export,
+feature order, candidate parameters, source code, and dependency versions. It then stores
+the data review, validation-only comparison, selected-model record, test predictions and
+metrics, temporal-block uncertainty results, and a release package. Test evaluation reads
+the selection and threshold recorded from validation; it does not choose a model.
+
+For new studies, immutable stage manifests bind each completed transition and its output
+checksums. Exact completed requests only verify and reuse those artifacts. Conflicting or
+out-of-order mutations fail, and a final-test attempt is recorded before scoring so an
+interrupted attempt cannot be silently repeated. Legacy studies remain readable but cannot
+be advanced without sufficient stage evidence.
+
+Temporal feature caches use a versioned provenance manifest covering the export, consumed
+history partitions, station metadata, transformation code and settings, Python, and
+relevant dependencies. Cache reuse verifies its checksum, schema, row count, unique keys,
+and development-only time bounds. Invalid cache pairs are rebuilt atomically in the current
+namespace while older caches and recorded studies remain untouched.
+
+Historical replay rebuilds the selected station's features from stored snapshots and checks
+them against the frozen export when a matching complete label exists. It always displays
+the historical observation time. The package verifies model checksums and reproduces saved
+scores before it is marked ready for review.

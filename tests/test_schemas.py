@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 
+import pytest
 from conftest import load_json
 
 from bikepulse.collector.schemas import normalize_information_payload, normalize_status_payload
@@ -68,3 +69,33 @@ def test_current_vendor_aliases_and_numeric_station_ids_are_normalized() -> None
 
     assert not batch.errors
     assert batch.rows[0].station_id == "213688169"
+
+
+@pytest.mark.parametrize("malformed", [None, 17, "station", ["not", "an", "object"]])
+def test_non_object_status_member_is_isolated(fixture_dir, malformed: object) -> None:
+    payload = load_json(fixture_dir / "gbfs_status_valid.json")
+    payload["data"]["stations"].insert(1, malformed)
+
+    batch = normalize_status_payload(
+        payload,
+        snapshot_id="status-20260809T210000Z-abc",
+        collected_at_utc=datetime(2026, 8, 9, 21, 0, tzinfo=UTC),
+    )
+
+    assert [row.station_id for row in batch.rows] == ["1", "2"]
+    assert len(batch.errors) == 1
+    assert batch.errors[0].station_id == "unknown"
+    assert batch.errors[0].code == "status_validation_error"
+
+
+@pytest.mark.parametrize("malformed", [None, 17, "station", ["not", "an", "object"]])
+def test_non_object_information_member_is_isolated(fixture_dir, malformed: object) -> None:
+    payload = load_json(fixture_dir / "gbfs_information_valid.json")
+    payload["data"]["stations"].insert(1, malformed)
+
+    batch = normalize_information_payload(payload)
+
+    assert [row.station_id for row in batch.rows] == ["1", "2"]
+    assert len(batch.errors) == 1
+    assert batch.errors[0].station_id == "unknown"
+    assert batch.errors[0].code == "information_validation_error"

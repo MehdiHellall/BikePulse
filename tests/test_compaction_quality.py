@@ -51,6 +51,27 @@ def test_compaction_is_idempotent_and_joins_station_dimension(fixture_dir, tmp_p
     assert first.filter(pl.col("station_id") == "1")["capacity"].item() == 20
 
 
+def test_compaction_keeps_valid_rows_around_non_object_member(fixture_dir, tmp_path) -> None:
+    payload = load_json(fixture_dir / "gbfs_status_valid.json")
+    payload["data"]["stations"].insert(1, None)
+    collected = datetime(2026, 8, 9, 21, 0, tzinfo=UTC)
+    store_snapshot(
+        data_dir=tmp_path,
+        kind="status",
+        collected_at_utc=collected,
+        payload=payload,
+        content_sha256="7" * 64,
+    )
+
+    frame = compact_status_hour(tmp_path, collected)
+    metadata = json.loads(
+        (tmp_path / "quality" / "compaction" / "date=2026-08-09" / "hour=21.json").read_text()
+    )
+
+    assert frame["station_id"].to_list() == ["1", "2"]
+    assert metadata["schema_error_count"] == 1
+
+
 def test_legacy_parquet_without_feed_timestamp_is_loaded_as_ineligible(
     fixture_dir, tmp_path
 ) -> None:

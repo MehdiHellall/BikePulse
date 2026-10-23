@@ -1,0 +1,38 @@
+[experiment]
+name = "past-only-temporal-history-v1"
+data_dir = "data"
+export_id = "5d53d536cfc4304a"
+development_end_utc = "2026-10-14T00:00:00+00:00"
+purge_minutes = 30
+neighbor_radius_meters = 1000.0
+seed = 42
+bootstrap_draws = 1000
+block_minutes = 60
+
+[model]
+learning_rate = 0.1
+max_iter = 100
+max_leaf_nodes = 15
+min_samples_leaf = 100
+l2_regularization = 1.0
+early_stopping = false
+random_state = 42
+
+[[folds]]
+name = "oct12_evening"
+validation_start_utc = "2026-10-12T20:00:00+00:00"
+validation_end_utc = "2026-10-13T00:00:00+00:00"
+
+[[folds]]
+name = "oct13_morning"
+validation_start_utc = "2026-10-13T06:00:00+00:00"
+validation_end_utc = "2026-10-13T10:55:00+00:00"
+
+[[folds]]
+name = "oct13_evening"
+validation_start_utc = "2026-10-13T19:00:00+00:00"
+validation_end_utc = "2026-10-14T00:00:00+00:00"
+
+[output]
+report_path = "docs/research/temporal-feature-study.md"
+plot_directory = "docs/research/assets"

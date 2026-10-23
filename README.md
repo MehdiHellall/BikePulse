@@ -9,7 +9,8 @@ The repository currently contains two working paths:
 - a local Streamlit map backed by the official GBFS feeds;
 - an offline collector and reproducible logistic-regression study backed by local history.
 
-Live forecast display and replay are planned work. See the [documentation index](docs/README.md)
+Live forecast display and replay in the map are planned work; the frozen-study CLI
+supports offline historical replay. See the [documentation index](docs/README.md)
 for the implemented contracts, operating guide, audits, and plans.
 
 ## Quick start
@@ -61,9 +62,9 @@ quality reports, and daily label-readiness reports under ignored `data/`. Laptop
 sleep, shutdown, and connectivity loss create explicit gaps. After a reboot, start
 the service manually.
 
-The current experiment is active. Status checks, log reads, tests, documentation
-edits, and readiness reports can run without stopping it. The full operating and
-recovery procedure is in [Operations](docs/operations.md).
+The collection experiment is frozen at `2026-10-15T07:29:30.349112+00:00`; the
+collector service is stopped. The full operating and recovery procedure is in
+[Operations](docs/operations.md).
 
 ## Label readiness and model study
 
@@ -79,9 +80,8 @@ make ml-readiness HOURS=24
 make ml-readiness HOURS=48
 ```
 
-The earliest preliminary 14-day window reusing the 12–13 October observations
-ends on 26 October 2026. Run it after `2026-10-26 00:00 UTC`, provided each
-chronological partition contains both label classes:
+The 14-day study remains available if collection is restarted and a complete window
+is accumulated:
 
 ```bash
 make ml-poc START=2026-10-12 END=2026-10-26
@@ -92,6 +92,29 @@ make ml-predict STATION_ID=48800374
 Results are preliminary, research only, and uncalibrated. The complete target,
 split, feature, and claim rules are in the [ML POC plan](docs/plans/ml-poc.md) and
 [data contract](docs/data-contract.md).
+
+## Frozen dataset
+
+The stopped collection produced 665,402 complete labeled windows at their observed
+2.95% positive prevalence. Reproduce the frozen export with:
+
+```bash
+make ml-dataset CUTOFF=2026-10-15T07:29:30.349112+00:00
+```
+
+The export also creates a training-only view with every positive training row and nine
+sampled negatives per positive. Validation and test data retain their observed class
+proportions. See the [frozen dataset plan](docs/plans/frozen-dataset.md) for the split,
+geographic features, coverage limits, and recorded outcome.
+
+The [guided frozen model study](docs/plans/frozen-model-study.md) selected a core-feature
+histogram-gradient model before testing. It reached 0.3559 AP on the frozen test split,
+compared with 0.1884 for the inventory ranking. Its package supports offline historical
+replay; deployment remains a separate decision.
+
+A separate [past-only temporal study](docs/research/temporal-feature-study.md) uses only
+pre-test development history and never re-scores the spent frozen test period. Reproduce it
+from `experiments/temporal-history.toml` with `make ml-temporal-study`.
 
 ## Verification
 

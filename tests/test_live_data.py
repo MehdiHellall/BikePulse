@@ -69,6 +69,23 @@ def test_snapshot_rejects_duplicate_ids_and_invalid_coordinates(fixture_dir: Pat
     assert snapshot.rejected_record_count == 3
 
 
+def test_snapshot_keeps_valid_stations_around_non_object_members(fixture_dir: Path) -> None:
+    information = load_json(fixture_dir / "gbfs_information_valid.json")
+    information["data"]["stations"].insert(1, None)
+    status = load_json(fixture_dir / "gbfs_status_valid.json")
+    status["data"]["stations"].insert(1, "malformed")
+
+    snapshot = build_station_snapshot(
+        information_result=result("information", information, "a"),
+        status_result=result("status", status, "b"),
+        fetched_at_utc=datetime(2026, 8, 9, 21, tzinfo=UTC),
+    )
+
+    assert [row.station_id for row in snapshot.stations] == ["1", "2"]
+    assert snapshot.excluded_station_count == 1
+    assert snapshot.rejected_record_count == 2
+
+
 class SequencedClient:
     def __init__(self, information: dict[str, Any], status: dict[str, Any]) -> None:
         self.information = information

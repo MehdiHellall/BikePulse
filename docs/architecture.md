@@ -15,14 +15,16 @@ BikePulse/
 │   ├── collector/  fetch, validation, raw storage, and service loop
 │   ├── config/     typed configuration
 │   ├── data/       compaction and quality reporting
-│   ├── ml/         canonical grid, labels, readiness, model study, prediction
+│   ├── ml/         labels, exports, model studies, temporal research, and replay
 │   └── io.py       atomic artifact writes
 ├── tests/
 │   ├── fixtures/   captured, controlled GBFS responses
 │   └── e2e/        browser smoke test
 ├── docs/
 │   ├── audits/     dated evidence and findings
-│   └── plans/      delivered scopes and future roadmap
+│   ├── plans/      delivered scopes and future roadmap
+│   └── research/   temporal study, feature catalog, and published plots
+├── experiments/    versioned research TOML configuration
 └── data/           ignored runtime data and generated artifacts
 ```
 

@@ -107,7 +107,7 @@ def normalize_status_payload(
     rows: list[NormalizedStatus] = []
     errors: list[RecordError] = []
     for raw in gbfs.data["stations"]:
-        station_id = str(raw.get("station_id", "unknown"))
+        station_id = str(raw.get("station_id", "unknown")) if isinstance(raw, dict) else "unknown"
         try:
             record = StationStatusRecord.model_validate(raw)
             last_reported = unix_to_utc(record.last_reported)
@@ -144,7 +144,7 @@ def normalize_information_payload(payload: dict[str, Any]) -> NormalizedBatch:
     rows: list[NormalizedInformation] = []
     errors: list[RecordError] = []
     for raw in gbfs.data["stations"]:
-        station_id = str(raw.get("station_id", "unknown"))
+        station_id = str(raw.get("station_id", "unknown")) if isinstance(raw, dict) else "unknown"
         try:
             record = StationInformationRecord.model_validate(raw)
             rows.append(
