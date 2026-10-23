@@ -5,15 +5,14 @@ from datetime import UTC, datetime
 import pytest
 from conftest import load_json
 
-from bikepulse.collector.schemas import normalize_information_payload, normalize_status_payload
+from bikepulse.feeds.schemas import normalize_information_payload, normalize_status_payload
 
 
 def test_valid_status_fixture_normalizes_to_contract(fixture_dir) -> None:
     payload = load_json(fixture_dir / "gbfs_status_valid.json")
     batch = normalize_status_payload(
         payload,
-        snapshot_id="status-20260809T210000Z-abc",
-        collected_at_utc=datetime(2026, 8, 9, 21, 0, tzinfo=UTC),
+        fetched_at_utc=datetime(2026, 8, 9, 21, 0, tzinfo=UTC),
     )
 
     assert not batch.errors
@@ -30,8 +29,7 @@ def test_invalid_status_record_produces_typed_error(fixture_dir) -> None:
     payload = load_json(fixture_dir / "gbfs_status_invalid_record.json")
     batch = normalize_status_payload(
         payload,
-        snapshot_id="status-20260809T210000Z-abc",
-        collected_at_utc=datetime(2026, 8, 9, 21, 0, tzinfo=UTC),
+        fetched_at_utc=datetime(2026, 8, 9, 21, 0, tzinfo=UTC),
     )
 
     assert batch.rows == []
@@ -39,7 +37,7 @@ def test_invalid_status_record_produces_typed_error(fixture_dir) -> None:
     assert batch.errors[0].code == "status_validation_error"
 
 
-def test_information_fixture_normalizes_to_station_dimension_rows(fixture_dir) -> None:
+def test_information_fixture_normalizes_to_station_rows(fixture_dir) -> None:
     payload = load_json(fixture_dir / "gbfs_information_valid.json")
     batch = normalize_information_payload(payload)
 
@@ -78,8 +76,7 @@ def test_non_object_status_member_is_isolated(fixture_dir, malformed: object) ->
 
     batch = normalize_status_payload(
         payload,
-        snapshot_id="status-20260809T210000Z-abc",
-        collected_at_utc=datetime(2026, 8, 9, 21, 0, tzinfo=UTC),
+        fetched_at_utc=datetime(2026, 8, 9, 21, 0, tzinfo=UTC),
     )
 
     assert [row.station_id for row in batch.rows] == ["1", "2"]

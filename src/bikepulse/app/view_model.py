@@ -42,6 +42,7 @@ def availability_view(
     mode: AvailabilityMode,
     now_utc: datetime,
     max_age_seconds: int,
+    warning_age_seconds: int | None = None,
     last_known: bool = False,
 ) -> AvailabilityView:
     count = station.available_bikes if mode == "bikes" else station.available_docks
@@ -58,11 +59,19 @@ def availability_view(
         return AvailabilityView(count, "Rentals unavailable", GREY, age, True)
     if mode == "docks" and not station.is_returning:
         return AvailabilityView(count, "Returns unavailable", GREY, age, True)
+    is_delayed = warning_age_seconds is not None and age > warning_age_seconds
+    delayed_suffix = " · Delayed report" if is_delayed else ""
     if count == 0:
-        return AvailabilityView(count, "None available", RED, age, True)
+        return AvailabilityView(count, "None available" + delayed_suffix, RED, age, not is_delayed)
     if count <= 3:
-        return AvailabilityView(count, "Low availability", AMBER, age, True)
-    return AvailabilityView(count, "Available", GREEN, age, True)
+        return AvailabilityView(
+            count,
+            "Low availability" + delayed_suffix,
+            AMBER,
+            age,
+            not is_delayed,
+        )
+    return AvailabilityView(count, "Available" + delayed_suffix, GREEN, age, not is_delayed)
 
 
 def map_rows(
@@ -72,6 +81,7 @@ def map_rows(
     now_utc: datetime,
     max_age_seconds: int,
     last_known: bool,
+    warning_age_seconds: int | None = None,
 ) -> list[dict[str, object]]:
     rows: list[dict[str, object]] = []
     for station in stations:
@@ -80,6 +90,7 @@ def map_rows(
             mode=mode,
             now_utc=now_utc,
             max_age_seconds=max_age_seconds,
+            warning_age_seconds=warning_age_seconds,
             last_known=last_known,
         )
         rows.append(

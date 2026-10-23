@@ -3,7 +3,7 @@ from __future__ import annotations
 import httpx
 import pytest
 
-from bikepulse.collector.client import GbfsClient, GbfsClientError
+from bikepulse.feeds.client import GbfsClient, GbfsClientError
 
 
 def test_retryable_server_error_is_retried() -> None:

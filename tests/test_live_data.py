@@ -14,8 +14,8 @@ from bikepulse.app.live_data import (
     LiveStationService,
     build_station_snapshot,
 )
-from bikepulse.collector.client import FetchResult
 from bikepulse.config import load_settings
+from bikepulse.feeds.client import FetchResult
 
 
 def result(url: str, payload: dict[str, Any], marker: str) -> FetchResult:

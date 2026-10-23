@@ -5,17 +5,13 @@ build-backend = "hatchling.build"
 [project]
 name = "bikepulse"
 version = "0.1.0"
-description = "Vélib availability map and offline stockout study"
+description = "Live Vélib availability and rule-based 30-minute outlook"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
   "httpx>=0.27",
-  "joblib>=1.4",
-  "numpy>=1.26",
-  "polars>=1.5",
   "pydantic>=2.8",
   "pydeck>=0.9",
-  "scikit-learn>=1.5",
   "streamlit>=1.66.1",
 ]
 
@@ -33,10 +29,6 @@ dev = [
 ]
 
 [project.scripts]
-bikepulse-collect = "bikepulse.collector.cli:collect_main"
-bikepulse-refresh-stations = "bikepulse.collector.cli:stations_main"
-bikepulse-compact-hour = "bikepulse.data.cli:compact_hour_main"
-bikepulse-quality-report = "bikepulse.data.cli:quality_report_main"
 bikepulse-app = "bikepulse.app.main:main"
 
 [tool.ruff]
@@ -55,7 +47,6 @@ markers = [
 
 [tool.coverage.run]
 omit = [
-  "src/bikepulse/*/cli.py",
   "src/bikepulse/app/main.py",
 ]
 

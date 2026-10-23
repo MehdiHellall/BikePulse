@@ -5,8 +5,9 @@ from dataclasses import dataclass, replace
 from datetime import UTC, datetime, timedelta
 from typing import Protocol
 
-from bikepulse.collector.client import FetchResult, GbfsClient
-from bikepulse.collector.schemas import (
+from bikepulse.config import AppSettings
+from bikepulse.feeds.client import FetchResult, GbfsClient
+from bikepulse.feeds.schemas import (
     GbfsPayload,
     NormalizedInformation,
     NormalizedStatus,
@@ -14,7 +15,6 @@ from bikepulse.collector.schemas import (
     normalize_status_payload,
     unix_to_utc,
 )
-from bikepulse.config import AppSettings
 
 STATUS_CACHE_TTL = timedelta(seconds=60)
 INFORMATION_CACHE_TTL = timedelta(hours=24)
@@ -84,8 +84,7 @@ def build_station_snapshot(
     information_batch = normalize_information_payload(information_result.payload)
     status_batch = normalize_status_payload(
         status_result.payload,
-        snapshot_id=f"live-{status_result.content_sha256[:12]}",
-        collected_at_utc=fetched_at_utc,
+        fetched_at_utc=fetched_at_utc,
     )
 
     information_rows = [
@@ -155,7 +154,15 @@ class LiveStationService:
 
     @property
     def max_station_age_seconds(self) -> int:
-        return self._settings.collection.max_station_age_seconds
+        return self._settings.live.max_station_age_seconds
+
+    @property
+    def station_warning_age_seconds(self) -> int:
+        return self._settings.live.station_warning_age_seconds
+
+    @property
+    def max_feed_age_seconds(self) -> int:
+        return self._settings.live.max_feed_age_seconds
 
     def get_snapshot(
         self, *, force_status: bool = False, now_utc: datetime | None = None

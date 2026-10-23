@@ -1,0 +1,21 @@
+[
+  {
+    "file": "page-Station-outlook.png",
+    "state": null,
+    "size": "1440x900",
+    "zoom": 1,
+    "group": "Station outlook",
+    "animationWaitMs": 0,
+    "issues": [],
+    "lint": [
+      {
+        "rule": "eyebrow",
+        "label": "标题上方的眉标",
+        "count": 1,
+        "examples": [
+          "div.stElementContainer.element-container「SERVICE MAP / PARIS MÉTR」"
+        ]
+      }
+    ]
+  }
+]

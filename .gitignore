@@ -14,6 +14,3 @@ htmlcov/
 
 # Build output
 dist/
-
-# Runtime observations and generated experiments
-/data/

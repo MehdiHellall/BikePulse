@@ -73,6 +73,19 @@ def test_freshness_boundary_recalculates_from_report_time(station: StationMapRow
     assert stale.label == "Stale data"
 
 
+def test_delayed_report_keeps_availability_visible(station: StationMapRow) -> None:
+    delayed = availability_view(
+        replace(station, station_last_reported_utc=NOW - timedelta(seconds=5400)),
+        mode="bikes",
+        now_utc=NOW,
+        warning_age_seconds=3600,
+        max_age_seconds=7200,
+    )
+    assert delayed.color == GREEN
+    assert delayed.label == "Available · Delayed report"
+    assert delayed.is_fresh is False
+
+
 def test_missing_is_unknown_and_never_zero(station: StationMapRow) -> None:
     view = availability_view(
         replace(station, available_bikes=None),

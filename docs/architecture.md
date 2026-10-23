@@ -1,73 +1,43 @@
 # Architecture
 
-## Repository structure
+BikePulse is a Python 3.12 Streamlit app with a PyDeck station map.
 
 ```text
-BikePulse/
-├── README.md
-├── AGENTS.md
-├── Makefile
-├── config.example.toml
-├── pyproject.toml
-├── uv.lock
-├── src/bikepulse/
-│   ├── app/        live Streamlit map
-│   ├── collector/  fetch, validation, raw storage, and service loop
-│   ├── config/     typed configuration
-│   ├── data/       compaction and quality reporting
-│   ├── ml/         labels, exports, model studies, temporal research, and replay
-│   └── io.py       atomic artifact writes
-├── tests/
-│   ├── fixtures/   captured, controlled GBFS responses
-│   └── e2e/        browser smoke test
-├── docs/
-│   ├── audits/     dated evidence and findings
-│   ├── plans/      delivered scopes and future roadmap
-│   └── research/   temporal study, feature catalog, and published plots
-├── experiments/    versioned research TOML configuration
-└── data/           ignored runtime data and generated artifacts
+src/bikepulse/
+  app/         Live snapshot service, availability presentation and Streamlit page
+  config/      Typed TOML settings
+  feeds/       GBFS HTTP client and record validation
+  prediction/  Pure outlook rules, geographic catalog and regional weather service
+tests/         Unit/integration fixtures and browser checks
+docs/          Contracts, rules, operations and UI screenshots
 ```
 
-Build output and tool caches (`dist/`, `.cache/`, `.pytest_cache/`, `.mypy_cache/`,
-`.ruff_cache/`) are ignored and are not part of the repository contract.
-`make clean` removes these generated files while preserving `.venv`, `.tools`, and `data/`.
+## Request flow
 
-## Runtime flow
+1. Load typed settings from the TOML selected by `BIKEPULSE_CONFIG`.
+2. Fetch official station information and status through the GBFS client. Normalize each
+   record, isolate invalid records and join valid stations by ID.
+3. Keep the latest successful snapshot in memory. Cache status for 60 seconds and station
+   information for 24 hours. Failed refreshes expose a labeled last-known snapshot.
+4. Render current availability, search and bike/dock modes. A Streamlit fragment reruns
+   every 60 seconds; manual refresh bypasses the status cache.
+5. Check prediction eligibility, then request one cached Paris-area weather forecast.
+6. Pass the selected station, snapshot, mode, current UTC time and optional weather into
+   `prediction.rules.forecast_station`. Render its status, category and reasons in details.
 
-```text
-Official GBFS
-    │
-    ├── station_information ──► versioned station dimension
-    │
-    └── station_status ──► raw JSON.gz + poll receipt
-                               │
-                               ▼
-                     hourly bronze/silver Parquet
-                               │
-                    ┌──────────┴──────────┐
-                    ▼                     ▼
-             quality/readiness      canonical ML grid
-                                          │
-                                          ▼
-                                  labels and features
-                                          │
-                                          ▼
-                                experiment artifacts
-```
+## Interfaces
 
-The collector owns experiment writes and its scheduled feed requests. The live map
-separately fetches and caches current GBFS data for interactive display. Offline ML
-commands read collected history and do not fetch the public feed.
+`StationMapRow` holds station identity, coordinates, capacity, optional inventory, operating
+flags and station-report time. `StationMapSnapshot` adds receipt/publication times and
+last-known/error information. These data classes have no Streamlit dependency.
 
-## Boundaries
+`forecast_station` returns immutable `StationOutlook`: status, optional risk, target UTC time,
+starting inventory, area/period descriptions, optional weather, reasons and rules version.
+The rule function makes no network requests or filesystem writes.
 
-- `collector/` validates external data before storage or normalization.
-- `data/` converts immutable raw evidence into rebuildable analytical tables.
-- `ml/` consumes the analytical history and writes versioned generated artifacts.
-- `app/` never trains a model or mutates collected history.
-- Configuration enters through typed settings; `BIKEPULSE_DATA_DIR` can relocate
-  all runtime artifacts without changing repository files.
+`WeatherService` validates Open-Meteo's UTC hourly response, caches successful forecasts for
+15 minutes and cools down failed requests for 60 seconds. Missing weather is a neutral rule
+input rather than a prediction failure.
 
-The current package layout is intentionally small. New modules should stay inside
-the domain that owns their state and tests should mirror public behavior rather
-than implementation structure.
+All application caches are memory-only. Runtime behavior does not require a writable
+application directory. Static geographic definitions ship with the Python package.

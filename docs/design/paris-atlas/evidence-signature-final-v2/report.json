@@ -1,0 +1,208 @@
+[
+  {
+    "file": "page.png",
+    "state": null,
+    "size": "1440x900",
+    "zoom": 1,
+    "animationWaitMs": 0,
+    "issues": [],
+    "lint": [
+      {
+        "rule": "eyebrow",
+        "label": "标题上方的眉标",
+        "count": 1,
+        "examples": [
+          "div.stElementContainer.element-container「SERVICE MAP / PARIS MÉTR」"
+        ]
+      }
+    ]
+  },
+  {
+    "file": "page-@2x.png",
+    "state": null,
+    "size": "1440x900",
+    "zoom": 2,
+    "animationWaitMs": 0,
+    "issues": [],
+    "lint": [
+      {
+        "rule": "eyebrow",
+        "label": "标题上方的眉标",
+        "count": 1,
+        "examples": [
+          "div.stElementContainer.element-container「SERVICE MAP / PARIS MÉTR」"
+        ]
+      }
+    ]
+  },
+  {
+    "file": "motion-probe-Select-station",
+    "state": null,
+    "size": "1440x900",
+    "zoom": 1,
+    "group": "Select station",
+    "motion": {
+      "load": {
+        "elements": 3,
+        "loops": 0,
+        "maxMove": 9,
+        "maxSize": 50.271,
+        "maxOpacity": 0.87,
+        "top": [
+          {
+            "el": "span.atlas-route-line",
+            "move": 1,
+            "size": 50.271,
+            "opacity": 0,
+            "loop": false,
+            "sources": [
+              "css:atlas-route-in"
+            ]
+          },
+          {
+            "el": "div.atlas-masthead.atlas-enter",
+            "move": 7,
+            "size": 0,
+            "opacity": 0.87,
+            "loop": false,
+            "sources": [
+              "css:atlas-enter"
+            ]
+          },
+          {
+            "el": "h1#bike-pulse",
+            "move": 9,
+            "size": 0,
+            "opacity": 0,
+            "loop": false,
+            "sources": [
+              "css:atlas-title-in"
+            ]
+          }
+        ]
+      },
+      "steps": {
+        "elements": 1,
+        "loops": 0,
+        "maxMove": 6,
+        "maxSize": 0,
+        "maxOpacity": 0.61,
+        "top": [
+          {
+            "el": "div.stVerticalBlock.st-emotion-cache-s4tyry",
+            "move": 6,
+            "size": 0,
+            "opacity": 0.61,
+            "loop": false,
+            "sources": [
+              "css:atlas-strip-in",
+              "css:atlas-line-in"
+            ]
+          }
+        ]
+      },
+      "hero": {
+        "elements": 0,
+        "loops": 0,
+        "maxMove": 0,
+        "maxSize": 0,
+        "maxOpacity": 0,
+        "top": [],
+        "layers": 0
+      },
+      "scroll": {
+        "elements": 0,
+        "loops": 0,
+        "maxMove": 0,
+        "maxSize": 0,
+        "maxOpacity": 0,
+        "top": [],
+        "scrollable": false
+      }
+    },
+    "issues": []
+  },
+  {
+    "file": "motion-entry-end.jpg",
+    "state": null,
+    "size": "1440x900",
+    "zoom": 1,
+    "group": "entry",
+    "issues": [
+      "录屏：没装 ffmpeg，只留了 motion-entry-start/mid/end.jpg 三帧"
+    ],
+    "frames": {
+      "start": {
+        "file": "motion-entry-start.jpg",
+        "source": "Page.screencastFrame",
+        "timeMs": 415
+      },
+      "mid": {
+        "file": "motion-entry-mid.jpg",
+        "source": "Page.screencastFrame",
+        "timeMs": 884
+      },
+      "end": {
+        "file": "motion-entry-end.jpg",
+        "source": "Page.captureScreenshot",
+        "timeMs": 4001
+      }
+    },
+    "sampling": {
+      "mode": "entry"
+    },
+    "durationMs": 4001,
+    "consistency": {
+      "status": "matched",
+      "reference": "motion-entry-end.jpg",
+      "different": false,
+      "changedPixels": 0,
+      "maxTilePixels": 0,
+      "pixelRatio": 0
+    },
+    "failed": true
+  },
+  {
+    "file": "motion-Select-station-end.jpg",
+    "state": null,
+    "size": "1440x900",
+    "zoom": 1,
+    "group": "Select station",
+    "issues": [
+      "录屏：没装 ffmpeg，只留了 motion-Select-station-start/mid/end.jpg 三帧"
+    ],
+    "frames": {
+      "start": {
+        "file": "motion-Select-station-start.jpg",
+        "source": "Page.captureScreenshot",
+        "timeMs": 832
+      },
+      "mid": {
+        "file": "motion-Select-station-mid.jpg",
+        "source": "Page.screencastFrame",
+        "timeMs": 1758
+      },
+      "end": {
+        "file": "motion-Select-station-end.jpg",
+        "source": "Page.captureScreenshot",
+        "timeMs": 4379
+      }
+    },
+    "sampling": {
+      "mode": "action",
+      "step": 2,
+      "action": "click",
+      "raw": "click text=Alpha"
+    },
+    "durationMs": 4379,
+    "consistency": {
+      "status": "matched",
+      "reference": "motion-Select-station-end.jpg",
+      "different": false,
+      "changedPixels": 19,
+      "maxTilePixels": 19,
+      "pixelRatio": 0.000014660493827160494
+    },
+    "failed": true
+  }
+]

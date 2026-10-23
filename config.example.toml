@@ -1,6 +1,3 @@
-[paths]
-data_dir = "data"
-
 [gbfs]
 status_url = "https://velib-metropole-opendata.smovengo.cloud/opendata/Velib_Metropole/station_status.json"
 information_url = "https://velib-metropole-opendata.smovengo.cloud/opendata/Velib_Metropole/station_information.json"
@@ -9,8 +6,11 @@ timeout_seconds = 10.0
 max_retries = 2
 backoff_seconds = 0.5
 
-[collection]
-max_station_age_seconds = 300
+[live]
+station_warning_age_seconds = 3600
+max_station_age_seconds = 7200
 max_feed_age_seconds = 300
-expected_interval_minutes = 5
-daily_station_refresh_hour_utc = 3
+
+[weather]
+enabled = true
+forecast_url = "https://api.open-meteo.com/v1/forecast"
