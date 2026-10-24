@@ -135,7 +135,8 @@ def _movement_adjustment(
     if movement.direction == "rising":
         points = max(0, points - 3)
         reason = (
-            f"Recent reports show {unit} rising by about {movement.rate_per_minute:.1f} per minute, "
+            f"Recent reports show {unit} rising by about "
+            f"{movement.rate_per_minute:.1f} per minute, "
             "which lowers the contextual risk."
         )
         return points, movement, reason, False
