@@ -116,16 +116,19 @@ def test_service_caches_feeds_and_recovers_with_last_known_data(
     cached = service.get_snapshot(now_utc=now + timedelta(seconds=30))
     assert cached == first
     assert len(client.calls) == 2
+    assert len(service.station_observations("1", now_utc=now + timedelta(seconds=30))) == 1
 
     client.fail_status = True
     fallback = service.get_snapshot(force_status=True, now_utc=now + timedelta(seconds=31))
     assert fallback.is_last_known is True
     assert fallback.error_message == "status feed offline"
     assert fallback.stations == first.stations
+    assert len(service.station_observations("1", now_utc=now + timedelta(seconds=31))) == 1
 
     client.fail_status = False
     recovered = service.get_snapshot(force_status=True, now_utc=now + timedelta(seconds=32))
     assert recovered.is_last_known is False
+    assert len(service.station_observations("1", now_utc=now + timedelta(seconds=32))) == 1
 
 
 def test_service_raises_clear_error_when_startup_has_no_data(

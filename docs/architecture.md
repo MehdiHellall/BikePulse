@@ -18,12 +18,15 @@ docs/          Contracts, rules, operations and UI screenshots
 2. Fetch official station information and status through the GBFS client. Normalize each
    record, isolate invalid records and join valid stations by ID.
 3. Keep the latest successful snapshot in memory. Cache status for 60 seconds and station
-   information for 24 hours. Failed refreshes expose a labeled last-known snapshot.
+   information for 24 hours. Feed each distinct successful station report into a bounded,
+   in-memory observation tracker. Failed refreshes expose a labeled last-known snapshot and
+   never enter the tracker.
 4. Render current availability, search and bike/dock modes. A Streamlit fragment reruns
    every 60 seconds; manual refresh bypasses the status cache.
-5. Check prediction eligibility, then request one cached Paris-area weather forecast.
-6. Pass the selected station, snapshot, mode, current UTC time and optional weather into
-   `prediction.rules.forecast_station`. Render its status, category and reasons in details.
+5. Check prediction eligibility, analyze the selected mode's recent movement, then request
+   one cached Paris-area weather forecast.
+6. Pass the station, network snapshot, movement analysis, mode, current UTC time and optional
+   weather into `prediction.rules.forecast_station`. Render its status, category and reasons.
 
 ## Interfaces
 
@@ -32,8 +35,16 @@ flags and station-report time. `StationMapSnapshot` adds receipt/publication tim
 last-known/error information. These data classes have no Streamlit dependency.
 
 `forecast_station` returns immutable `StationOutlook`: status, optional risk, target UTC time,
-starting inventory, area/period descriptions, optional weather, reasons and rules version.
-The rule function makes no network requests or filesystem writes.
+starting inventory, area/period descriptions, optional weather and movement, nearby pressure,
+reasons and rules version. The rule function makes no network requests or filesystem writes.
+
+`StationObservationTracker` stores no more than 21 reports per station and removes reports
+older than 20 minutes. It deduplicates on the station-report timestamp, rejects out-of-order
+reports and removes stations absent from the latest successful snapshot. `analyze_inventory_movement`
+is a separate pure calculation. It uses a recency-weighted median of pairwise slopes, resets
+across operating gaps or suspected rebalancing and clamps its projection to station capacity.
+The tracker is owned by the cached `LiveStationService`, so Streamlit reruns and user sessions
+share one bounded window. No observation is written to disk.
 
 `WeatherService` validates Open-Meteo's UTC hourly response, caches successful forecasts for
 15 minutes and cools down failed requests for 60 seconds. Missing weather is a neutral rule

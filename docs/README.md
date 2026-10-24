@@ -2,8 +2,8 @@
 
 - [Architecture](architecture.md): package boundaries and live request flow.
 - [Data contract](data-contract.md): feed validation, timestamps, freshness and unknown states.
-- [Prediction rules](prediction-rules.md): rule version 4, flexible freshness, weather and
-  geographic/time assumptions.
+- [Prediction rules](prediction-rules.md): rule version 5, bounded recent movement, nearby
+  pressure, flexible freshness, weather and geographic/time assumptions.
 - [Operations](operations.md): setup, configuration, refresh, verification and troubleshooting.
 
 The app has one live availability page. Station details contain the 30-minute outlook.

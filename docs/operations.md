@@ -5,22 +5,36 @@
 Use Python 3.12. Run `make setup` to synchronize the local locked environment, then `make run`.
 Do not install application packages into system Python. Only the Streamlit process is needed.
 
+## Streamlit Community Cloud
+
+Set the app's main file to `streamlit_app.py` and select Python 3.12. Community Cloud reads
+`requirements.txt`, which installs the local package and its runtime dependencies. The
+repository's `.streamlit/config.toml` enables headless mode, disables usage statistics and
+selects the light theme. No Streamlit secrets are required by the default configuration.
+
+The app reads `config.example.toml` from the repository root by default. To use a deployment-
+specific TOML file, commit that file and set `BIKEPULSE_CONFIG` under the app's Advanced
+settings to its repository-relative path. Do not put credentials in TOML or commit secrets.
+
 The app defaults to `config.example.toml`; `BIKEPULSE_CONFIG` selects another TOML file.
 Configuration sections are:
 
 - `[gbfs]`: station status/information URLs, user agent, HTTP timeout, retry count and backoff.
 - `[live]`: `station_warning_age_seconds` defaults to 3600, the hard
   `max_station_age_seconds` cutoff to 7200, and status-feed freshness to 300 seconds.
+- `[movement]`: controls the bounded 20-minute observation window, 21-report hard limit,
+  minimum usable span, recent-sample age, rebalancing thresholds and stable-rate threshold.
 - `[weather]`: `enabled` defaults to true and `forecast_url` defaults to Open-Meteo.
 
 Unknown settings are rejected. Custom configurations must follow the example schema.
-No data directory or background service is required.
+No data directory or background service is required. Recent movement observations exist only
+inside the process and are discarded on restart.
 
 ## Refresh and failures
 
 The open page refreshes each minute. **Refresh data** bypasses the status cache; station
 information retains its 24-hour cache and weather its 15-minute cache. Restart Streamlit to
-reload changed settings or clear shared in-memory resources.
+reload changed settings or clear shared in-memory resources, including recent observations.
 
 If startup cannot load station feeds, the page shows an error and **Try again**. Later feed
 failures retain a visibly labeled last-known snapshot, disable normal availability colors

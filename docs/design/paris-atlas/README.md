@@ -7,9 +7,10 @@ station, read current bike or dock availability and decide whether that supply i
 likely to hold for the next 30 minutes.
 
 The selected direction treats the map as a contemporary Paris street atlas. Warm
-paper, ink, cobalt and restrained status colors establish the visual language. The
-map remains the first-screen anchor; station identity, inventory and outlook form one
-horizontal strip immediately below it rather than separate dashboard cards.
+paper, ink, cobalt and restrained status colors establish the visual language. Before
+selection the map is the first-screen anchor. After selection, station identity,
+inventory and outlook move directly beneath the controls, with the map continuing the
+decision spatially below rather than delaying the answer.
 
 The interface targets desktop first while retaining Streamlit's responsive column
 stacking. It preserves explicit live, last-known, stale, unavailable and weather-fallback
@@ -18,33 +19,39 @@ probabilities or validated predictions.
 
 ## Signature refinement
 
-The refined north star is a contemporary Paris street atlas with the immediacy of a
-cycling control room. The interface should feel like a maintained public-facing
-service, not a concept dashboard: exact feed times, automatic-refresh cadence,
-inventory counts, stale states and the rule disclaimer carry more visual weight than
-decoration.
+The refined north star is a contemporary Paris street atlas with the calm of a
+maintained public service. The editorial wordmark is smaller, the coordinate eyebrow
+and ornamental step rail are gone, and the page-wide grid is limited to a faint header
+texture. Thin ink rules replace heavy cards and shadows.
 
-The signature comes from the oversized editorial wordmark, a plotted coordinate grid,
-ink map rules, cobalt registration marks and a route-like decision rail from live feed
-to station inventory to the 30-minute outlook. The rail is product navigation rather
-than ornament. The upper-case service eyebrow is intentionally retained as atlas
-wayfinding; the screenshot linter flags it as a generic eyebrow pattern, but here it
-identifies the service, geography and data mode before the wordmark.
+Network health, feed time and station count form one compact operational header. The
+plain task line “Find a Vélib.” is grouped with its search field; mode and refresh form
+a separate action pair. On phones the task and search use the full row, with mode and
+refresh sharing the next row. Station count stays available on desktop but gives way to
+the more useful live state and update time on the narrower screen.
 
-The previous Streamlit chrome and generic success card were removed. Network health,
-feed time and station count now form one responsive operational bar. On phones that
-bar compresses to a single row, the search remains full width, mode and refresh actions
-share the next row, and a useful part of the map is visible in the initial 390 by 844
-viewport. Supporting labels were enlarged rather than hidden.
+The prediction is an outcome-first `NOW → +30 MIN` decision. Current inventory is the
+largest value, the opposite inventory is secondary, and the endpoint uses short rider
+language such as “Looks stable”, “May run low” or “May run out”. The visible “Rule
+estimate · not validated” safeguard preserves honesty without repeating the risk in a
+second label. Compact factors sit below; operational and rule details live in collapsed
+disclosures.
+
+When that endpoint is concerning, one cobalt Plan B strip continues the same decision
+sequence. It names the closest safer station within two kilometres, shows its current
+inventory and outlook, and uses one direct action to select it. A dotted cobalt line on
+the map connects the current station to the alternative; its distance is explicitly
+straight-line rather than a routing claim.
 
 ## Interaction and motion
 
-- The first visit reveals the title from a clipping mask while the three-stop decision
-  route draws left to right. The total entrance remains under one second.
-- Buttons use a short two-pixel press response and a hard cobalt focus/hover shadow,
-  like a map-case latch closing.
-- Selecting a station redraws the map around the chosen point and unfolds the
-  station strip with a cobalt rule tracing across its top edge.
+- A 420 ms cobalt sweep marks the first successful feed load and explicit successful
+  refresh. It does not repeat during the automatic refresh cycle or after a failure.
+- Buttons use a short two-pixel press response and a cobalt focus state.
+- Selecting a station redraws the map and reveals the decision line with a brief,
+  functional endpoint animation.
+- A newly available Plan B enters from the selected-station side, and choosing it moves
+  the map focus and station decision panel to that alternative.
 - Availability mode, reason disclosure and refresh feedback remain close to the
   initiating control.
 - Reduced-motion preferences remove every custom animation and transition without
@@ -58,25 +65,47 @@ viewport. Supporting labels were enlarged rather than hidden.
 - Missing or stale information remains unknown and visibly neutral.
 - The live map remains usable through PyDeck selection and station search.
 
-Baseline screenshots remain in `docs/assets/`. Canonical signature evidence is in
-`evidence-signature-final-v2/`, including the first screen, 2x capture, motion probe and
-entry/selection frames. The fresh selected-station state is in
-`evidence-signature-selected-v2/`; the final phone viewport is in
-`evidence-signature-mobile-final4/`. Browser checks found no console errors,
-horizontal overflow, failed images or readability lint. FFmpeg was unavailable, so
-motion is represented by start, middle and end frames rather than an MP4.
+Earlier baseline and signature screenshots remain in `docs/assets/` and the existing
+evidence directories. They document the iteration that preceded this simplified pass.
+Current Plan B desktop and mobile captures are in `evidence-plan-b-final/`; the clean
+mobile first-viewport capture is in `evidence-plan-b-mobile-viewport/`.
+
+## Layout refinement
+
+The final layout pass widens the desktop reading frame to 1380 pixels while increasing
+the page gutters and section rhythm. Empty and selected states use different spacing:
+the map stays close to the controls before selection, while a selected station gets a
+clear decision block before the spatial context. Small operational labels were raised
+to a readable size rather than compressed to manufacture whitespace.
+
+On mobile, the header is shorter, the forecast is a horizontal Now-to-+30 sequence and
+Plan B uses a compact two-column summary above a full-width action. The map legend uses
+a stable two-column grid, with an odd final item spanning the row. This keeps the full
+station decision and alternative action in the first 390 × 844 viewport without
+shrinking touch targets.
 
 ## Review record
 
-An independent visual review found no blocker and asked for one high-impact correction:
-bring the map into the first phone viewport while increasing the smallest supporting
-labels. It confirmed that the paper grid, ink rules, cobalt registration details,
-explicit freshness and validation disclaimer make the result distinctive without
-feeling speculative. The final mobile pass incorporates that feedback and keeps all
-operational safeguards visible.
+This simplified pass deliberately removes the patterns that made the previous version
+feel generated: the eyebrow, coordinates, numbered section marker, decorative route
+rail, large grid field, hard shadows, pastel prediction alerts and repeated prose. The
+remaining signature comes from type, paper, exact service data and the single connected
+inventory-to-outlook gesture.
 
-The independent UX reviewer could not access a browser surface and did not fabricate a
-walkthrough. The real Playwright journey therefore supplied interaction evidence. It
-completed station selection, inventory/outlook reading, reason disclosure, dock-mode
-switching and feed refresh three consecutive times without a failure. Sound, touch and
-physical-device behavior remain outside this pass.
+The Plan B visual review preserved the compact alternative strip and dotted connection.
+It prompted four corrections: the selected decision now precedes the map, mobile helper
+copy no longer collides with search, the selected marker uses ink while the alternative
+uses cobalt, and search focus follows the cobalt control language. The independent UX
+reviewer had no browser surface and made no product claims; the Playwright journey covers
+selection, recommendation reading, choosing the alternative and the resulting station
+change.
+
+A final independent layout review identified three hierarchy issues: search ownership
+was ambiguous on desktop, the mobile header pushed the action below the first screen,
+and the wrapped legend could leave one item alone. The final pass groups label and
+field, quiets nonessential mobile service metadata, removes repeated forecast wording
+and gives the legend a deterministic grid. Responsive evidence for selected and
+unselected states is in `evidence-layout-final/`. Full-page selected captures can report
+a headless WebGL context loss when the off-screen PyDeck canvas is rasterized; the
+visible decision area remains intact and the browser journey separately exercises the
+live map.

@@ -6,6 +6,7 @@ from datetime import UTC, datetime, timedelta
 from typing import Protocol
 
 from bikepulse.config import AppSettings
+from bikepulse.config.settings import MovementSettings
 from bikepulse.feeds.client import FetchResult, GbfsClient
 from bikepulse.feeds.schemas import (
     GbfsPayload,
@@ -15,6 +16,7 @@ from bikepulse.feeds.schemas import (
     normalize_status_payload,
     unix_to_utc,
 )
+from bikepulse.prediction.movement import StationObservation, StationObservationTracker
 
 STATUS_CACHE_TTL = timedelta(seconds=60)
 INFORMATION_CACHE_TTL = timedelta(hours=24)
@@ -148,6 +150,7 @@ class LiveStationService:
     def __init__(self, settings: AppSettings, client: JsonClient) -> None:
         self._settings = settings
         self._client = client
+        self._observation_tracker = StationObservationTracker(settings.movement)
         self._information: _CachedFeed | None = None
         self._status: _CachedFeed | None = None
         self._last_successful: StationMapSnapshot | None = None
@@ -163,6 +166,15 @@ class LiveStationService:
     @property
     def max_feed_age_seconds(self) -> int:
         return self._settings.live.max_feed_age_seconds
+
+    @property
+    def movement_settings(self) -> MovementSettings:
+        return self._settings.movement
+
+    def station_observations(
+        self, station_id: str, *, now_utc: datetime
+    ) -> tuple[StationObservation, ...]:
+        return self._observation_tracker.observations_for(station_id, now_utc=now_utc)
 
     def get_snapshot(
         self, *, force_status: bool = False, now_utc: datetime | None = None
@@ -184,6 +196,24 @@ class LiveStationService:
                 is_last_known=True,
                 error_message=str(exc),
             )
+        self._observation_tracker.record_batch(
+            (
+                StationObservation(
+                    station_id=station.station_id,
+                    reported_at_utc=station.station_last_reported_utc,
+                    capacity=station.capacity,
+                    available_bikes=station.available_bikes,
+                    available_docks=station.available_docks,
+                    is_installed=station.is_installed,
+                    is_renting=station.is_renting,
+                    is_returning=station.is_returning,
+                )
+                for station in snapshot.stations
+                if station.station_last_reported_utc is not None
+            ),
+            active_station_ids={station.station_id for station in snapshot.stations},
+            observed_at_utc=snapshot.fetched_at_utc,
+        )
         self._last_successful = snapshot
         return snapshot
 

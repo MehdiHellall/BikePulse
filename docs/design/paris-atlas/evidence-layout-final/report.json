@@ -1,0 +1,46 @@
+[
+  {
+    "file": "page-Unselected-1440x900.png",
+    "state": null,
+    "size": "1440x900",
+    "zoom": 1,
+    "group": "Unselected",
+    "animationWaitMs": 0,
+    "issues": [],
+    "lint": []
+  },
+  {
+    "file": "page-Selected-1440x900.png",
+    "state": null,
+    "size": "1440x900",
+    "zoom": 1,
+    "group": "Selected",
+    "animationWaitMs": 0,
+    "issues": [
+      "WebGL：绘图上下文丢失 1 次"
+    ],
+    "lint": []
+  },
+  {
+    "file": "page-Unselected-390x844.png",
+    "state": null,
+    "size": "390x844",
+    "zoom": 1,
+    "group": "Unselected",
+    "animationWaitMs": 0,
+    "issues": [],
+    "lint": []
+  },
+  {
+    "file": "page-Selected-390x844.png",
+    "state": null,
+    "size": "390x844",
+    "zoom": 1,
+    "group": "Selected",
+    "animationWaitMs": 0,
+    "issues": [
+      "WebGL：绘图上下文丢失 1 次"
+    ],
+    "lint": []
+  }
+]

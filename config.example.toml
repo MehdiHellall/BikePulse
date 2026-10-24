@@ -11,6 +11,16 @@ station_warning_age_seconds = 3600
 max_station_age_seconds = 7200
 max_feed_age_seconds = 300
 
+[movement]
+observation_window_seconds = 1200
+max_observations_per_station = 21
+min_observations = 3
+min_span_seconds = 300
+max_sample_age_seconds = 300
+rebalancing_min_count = 8
+rebalancing_min_capacity_share = 0.35
+stable_rate_per_minute = 0.1
+
 [weather]
 enabled = true
 forecast_url = "https://api.open-meteo.com/v1/forecast"

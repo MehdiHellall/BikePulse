@@ -36,9 +36,31 @@ class WeatherSettings(SettingsModel):
     forecast_url: HttpUrl = HttpUrl("https://api.open-meteo.com/v1/forecast")
 
 
+class MovementSettings(SettingsModel):
+    observation_window_seconds: int = Field(default=1200, ge=300, le=1200)
+    max_observations_per_station: int = Field(default=21, ge=3, le=21)
+    min_observations: int = Field(default=3, ge=3, le=21)
+    min_span_seconds: int = Field(default=300, ge=60, le=1200)
+    max_sample_age_seconds: int = Field(default=300, ge=60, le=1200)
+    rebalancing_min_count: int = Field(default=8, ge=1, le=100)
+    rebalancing_min_capacity_share: float = Field(default=0.35, gt=0, le=1)
+    stable_rate_per_minute: float = Field(default=0.1, gt=0, le=2)
+
+    @model_validator(mode="after")
+    def validate_movement_limits(self) -> MovementSettings:
+        if self.min_observations > self.max_observations_per_station:
+            raise ValueError("minimum observations cannot exceed the per-station limit")
+        if self.min_span_seconds > self.observation_window_seconds:
+            raise ValueError("minimum trend span cannot exceed the observation window")
+        if self.max_sample_age_seconds > self.observation_window_seconds:
+            raise ValueError("maximum sample age cannot exceed the observation window")
+        return self
+
+
 class AppSettings(SettingsModel):
     gbfs: GbfsSettings
     live: LiveSettings = Field(default_factory=LiveSettings)
+    movement: MovementSettings = Field(default_factory=MovementSettings)
     weather: WeatherSettings = Field(default_factory=WeatherSettings)
 
 

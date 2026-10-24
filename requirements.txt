@@ -1,0 +1,3 @@
+# Streamlit Community Cloud installs the local package so the src/ layout is
+# importable when the root entrypoint is selected.
+-e .

@@ -8,6 +8,7 @@ from zoneinfo import ZoneInfo
 import pytest
 
 from bikepulse.app.live_data import StationMapRow, StationMapSnapshot
+from bikepulse.prediction.movement import InventoryMovement, MovementAnalysis
 from bikepulse.prediction.rules import HORIZON, forecast_station, is_peak_period
 from bikepulse.prediction.weather import WeatherConditions
 from bikepulse.prediction.zones import (
@@ -45,6 +46,16 @@ def weather(**changes):
     return replace(WeatherConditions(NOW, NOW, 16, 10, 12), **changes)
 
 
+def movement(
+    direction="falling",
+    rate=-0.25,
+    projected=2.5,
+    consistency=0.9,
+) -> MovementAnalysis:
+    estimate = InventoryMovement(direction, rate, consistency, projected, 4, 15)
+    return MovementAnalysis("estimated", estimate, "Recent movement is usable.")
+
+
 @pytest.mark.parametrize("mode", ["bikes", "docks"])
 @pytest.mark.parametrize(
     "count,capacity,expected",
@@ -80,6 +91,76 @@ def test_busy_area_and_peak_period_adjust_once() -> None:
     # A large buffer gets just two context points, even when zones overlap.
     station = replace(station, available_bikes=10)
     assert forecast_station(station, snapshot, mode="bikes", now_utc=peak_now).risk == "Medium"
+
+
+def test_recent_movement_is_the_strongest_context_and_is_mode_specific() -> None:
+    station, snapshot = station_and_snapshot(available_bikes=10, available_docks=6)
+    falling_bikes = forecast_station(
+        station,
+        snapshot,
+        mode="bikes",
+        now_utc=NOW,
+        movement_analysis=movement(),
+    )
+    rising_docks = forecast_station(
+        station,
+        snapshot,
+        mode="docks",
+        now_utc=NOW,
+        movement_analysis=movement("rising", 0.25, 13),
+    )
+    assert falling_bikes.risk == "High"
+    assert falling_bikes.movement is not None
+    assert "bikes falling" in " ".join(falling_bikes.reasons)
+    assert rising_docks.risk == "Low"
+    assert rising_docks.movement is not None
+    assert "open docks rising" in " ".join(rising_docks.reasons)
+
+
+def test_untrusted_movement_falls_back_to_existing_context_without_warmup_state() -> None:
+    station, snapshot = station_and_snapshot(available_bikes=6)
+    unavailable = MovementAnalysis(
+        "insufficient",
+        None,
+        "Not enough distinct recent reports are available for movement.",
+    )
+    outlook = forecast_station(
+        station,
+        snapshot,
+        mode="bikes",
+        now_utc=NOW,
+        movement_analysis=unavailable,
+    )
+    assert outlook.status == "estimated"
+    assert outlook.risk == "Medium"
+    assert any("Current conditions drive" in reason for reason in outlook.reasons)
+    assert all("warm" not in reason.casefold() for reason in outlook.reasons)
+
+
+def test_nearby_pressure_is_mode_specific_and_added_only_once() -> None:
+    station, snapshot = station_and_snapshot(available_bikes=10, available_docks=10)
+    neighbors = (
+        replace(
+            station,
+            station_id="2",
+            longitude=0.001,
+            available_bikes=2,
+            available_docks=18,
+        ),
+        replace(
+            station,
+            station_id="3",
+            longitude=-0.001,
+            available_bikes=1,
+            available_docks=19,
+        ),
+    )
+    snapshot = replace(snapshot, stations=(station, *neighbors))
+    bikes = forecast_station(station, snapshot, mode="bikes", now_utc=NOW)
+    docks = forecast_station(station, snapshot, mode="docks", now_utc=NOW)
+    assert bikes.nearby_pressure_count == 2
+    assert sum("nearby stations have low" in reason for reason in bikes.reasons) == 1
+    assert docks.nearby_pressure_count == 0
 
 
 def test_weather_adjustment_is_simple_and_never_required() -> None:
@@ -163,6 +244,7 @@ def test_expired_weather_is_ignored_without_losing_the_prediction() -> None:
     [
         {"available_bikes": None},
         {"available_bikes": -1},
+        {"available_bikes": 21},
         {"capacity": 0},
         {"is_installed": False},
         {"is_installed": None},

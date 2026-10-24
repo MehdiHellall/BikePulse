@@ -7,10 +7,11 @@ from zoneinfo import ZoneInfo
 
 from bikepulse.app.live_data import StationMapRow, StationMapSnapshot
 from bikepulse.app.view_model import AvailabilityMode
+from bikepulse.prediction.movement import InventoryMovement, MovementAnalysis
 from bikepulse.prediction.weather import WeatherConditions
-from bikepulse.prediction.zones import matching_zones
+from bikepulse.prediction.zones import coordinate_distance_metres, matching_zones
 
-RULES_VERSION = "4"
+RULES_VERSION = "5"
 HORIZON = timedelta(minutes=30)
 PARIS = ZoneInfo("Europe/Paris")
 LOW_INVENTORY = 3
@@ -20,6 +21,8 @@ RAIN_THRESHOLD = 60
 WIND_THRESHOLD_KMH = 30
 COLD_THRESHOLD_C = 5
 HOT_THRESHOLD_C = 30
+NEARBY_RADIUS_METRES = 500
+NEARBY_PRESSURE_MIN_STATIONS = 2
 Risk = Literal["Low", "Medium", "High"]
 PredictionStatus = Literal["estimated", "already_empty", "already_full", "unavailable"]
 
@@ -35,6 +38,8 @@ class StationOutlook:
     weather: WeatherConditions | None
     reasons: tuple[str, ...]
     rules_version: str = RULES_VERSION
+    movement: InventoryMovement | None = None
+    nearby_pressure_count: int = 0
 
 
 def is_peak_period(target_utc: datetime) -> bool:
@@ -45,6 +50,105 @@ def is_peak_period(target_utc: datetime) -> bool:
     return 7 * 60 <= minute < 10 * 60 or 17 * 60 <= minute < 20 * 60
 
 
+def _nearby_pressure_count(
+    station: StationMapRow,
+    snapshot: StationMapSnapshot,
+    *,
+    mode: AvailabilityMode,
+    now_utc: datetime,
+    max_station_age_seconds: int,
+) -> int:
+    pressured = 0
+    for candidate in snapshot.stations:
+        if candidate.station_id == station.station_id:
+            continue
+        if (
+            coordinate_distance_metres(
+                station.latitude,
+                station.longitude,
+                candidate.latitude,
+                candidate.longitude,
+            )
+            > NEARBY_RADIUS_METRES
+        ):
+            continue
+        timestamp = candidate.station_last_reported_utc
+        count = candidate.available_bikes if mode == "bikes" else candidate.available_docks
+        operating = candidate.is_renting if mode == "bikes" else candidate.is_returning
+        if (
+            timestamp is None
+            or count is None
+            or candidate.capacity <= 0
+            or not 0 <= count <= candidate.capacity
+            or candidate.is_installed is not True
+            or operating is not True
+        ):
+            continue
+        age = (now_utc - timestamp.astimezone(UTC)).total_seconds()
+        if not 0 <= age <= max_station_age_seconds:
+            continue
+        if count <= LOW_INVENTORY or count / candidate.capacity <= LIMITED_SHARE:
+            pressured += 1
+    return pressured
+
+
+def _movement_adjustment(
+    points: int,
+    *,
+    analysis: MovementAnalysis | None,
+    capacity: int,
+    mode: AvailabilityMode,
+) -> tuple[int, InventoryMovement | None, str, bool]:
+    if analysis is None or analysis.estimate is None:
+        detail = (
+            analysis.reason
+            if analysis is not None
+            else "No trustworthy recent movement is available."
+        )
+        return points, None, f"{detail} Current conditions drive the estimate.", False
+
+    movement = analysis.estimate
+    unit = "bikes" if mode == "bikes" else "open docks"
+    if movement.direction == "falling":
+        projected_limited = (
+            movement.projected_count <= LIMITED_INVENTORY
+            or movement.projected_count / capacity <= LIMITED_SHARE
+        )
+        if movement.projected_count <= LOW_INVENTORY:
+            points += 4
+            high_floor = True
+        elif projected_limited:
+            points += 3
+            high_floor = False
+        else:
+            points += 2
+            high_floor = False
+        reason = (
+            f"Recent reports show {unit} falling by about "
+            f"{abs(movement.rate_per_minute):.1f} per minute."
+        )
+        if high_floor:
+            reason += " That movement projects critically low availability within 30 minutes."
+        elif projected_limited:
+            reason += " That movement projects limited availability within 30 minutes."
+        return points, movement, reason, high_floor
+    if movement.direction == "rising":
+        points = max(0, points - 3)
+        reason = (
+            f"Recent reports show {unit} rising by about {movement.rate_per_minute:.1f} per minute, "
+            "which lowers the contextual risk."
+        )
+        return points, movement, reason, False
+    if movement.direction == "stable":
+        return points, movement, f"Recent {unit} availability is stable.", False
+    return (
+        points,
+        movement,
+        f"Recent {unit} movement is mixed, so it did not change the estimate.",
+        False,
+    )
+
+
 def forecast_station(
     station: StationMapRow,
     snapshot: StationMapSnapshot,
@@ -52,6 +156,7 @@ def forecast_station(
     mode: AvailabilityMode,
     now_utc: datetime,
     weather: WeatherConditions | None = None,
+    movement_analysis: MovementAnalysis | None = None,
     station_warning_age_seconds: int = 3600,
     max_station_age_seconds: int = 7200,
     max_feed_age_seconds: int = 300,
@@ -66,9 +171,25 @@ def forecast_station(
     usable_weather = weather if weather is not None and weather.is_usable(now, target) else None
 
     def result(
-        status: PredictionStatus, risk: Risk | None, reasons: tuple[str, ...]
+        status: PredictionStatus,
+        risk: Risk | None,
+        reasons: tuple[str, ...],
+        *,
+        movement: InventoryMovement | None = None,
+        nearby_pressure_count: int = 0,
     ) -> StationOutlook:
-        return StationOutlook(status, risk, target, count, area, period, usable_weather, reasons)
+        return StationOutlook(
+            status,
+            risk,
+            target,
+            count,
+            area,
+            period,
+            usable_weather,
+            reasons,
+            movement=movement,
+            nearby_pressure_count=nearby_pressure_count,
+        )
 
     if snapshot.is_last_known:
         return result("unavailable", None, ("Last known data; waiting for a successful refresh.",))
@@ -89,6 +210,8 @@ def forecast_station(
         return result("unavailable", None, ("Current inventory is unknown or invalid.",))
     if station.capacity <= 0:
         return result("unavailable", None, ("Station capacity is unavailable or invalid.",))
+    if count > station.capacity:
+        return result("unavailable", None, ("Current inventory exceeds station capacity.",))
     if not station.is_installed:
         return result(
             "unavailable", None, ("Station is offline or its operating state is unknown.",)
@@ -116,6 +239,18 @@ def forecast_station(
         if limited
         else "Current availability provides a useful buffer."
     )
+    nearby_pressure_count = _nearby_pressure_count(
+        station,
+        snapshot,
+        mode=mode,
+        now_utc=now,
+        max_station_age_seconds=max_station_age_seconds,
+    )
+    if nearby_pressure_count >= NEARBY_PRESSURE_MIN_STATIONS:
+        points += 1
+        reasons.append(f"{nearby_pressure_count} nearby stations have low {mode} availability.")
+    else:
+        reasons.append("Nearby stations do not add concentrated availability pressure.")
     if zones:
         points += 1
         reasons.append("This station is in a busy area.")
@@ -126,6 +261,13 @@ def forecast_station(
         reasons.append("The next 30 minutes fall in a busy travel period.")
     else:
         reasons.append("The next 30 minutes are outside the busiest travel periods.")
+    points, movement, movement_reason, movement_high_floor = _movement_adjustment(
+        points,
+        analysis=movement_analysis,
+        capacity=station.capacity,
+        mode=mode,
+    )
+    reasons.append(movement_reason)
     if usable_weather is None:
         reasons.append("Weather is unavailable, so it did not change the estimate.")
     elif (
@@ -139,7 +281,16 @@ def forecast_station(
     else:
         reasons.append("Current weather does not change the estimate.")
     risk: Risk = "High" if points >= 4 else "Medium" if points >= 2 else "Low"
-    if count <= LOW_INVENTORY:
+    if count <= LOW_INVENTORY or movement_high_floor:
         risk = "High"
-        reasons.insert(0, "Only 1-3 available: high risk regardless of contextual adjustments.")
-    return result("estimated", risk, tuple(reasons))
+        if count <= LOW_INVENTORY:
+            reasons.insert(0, "Only 1-3 available: high risk regardless of contextual adjustments.")
+    return result(
+        "estimated",
+        risk,
+        tuple(reasons),
+        movement=movement,
+        nearby_pressure_count=(
+            nearby_pressure_count if nearby_pressure_count >= NEARBY_PRESSURE_MIN_STATIONS else 0
+        ),
+    )

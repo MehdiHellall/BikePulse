@@ -38,6 +38,21 @@ The map retains its availability convention: zero red, 1–3 amber, 4+ green. De
 retain those colors but include a delayed label; unknown, stale, inactive and last-known
 states are grey. The outlook uses the same station thresholds.
 
+## Bounded recent observations
+
+Each distinct successful station report may enter an in-memory rolling window. Records keep
+only station ID, station-report time, capacity, bike/dock counts and required operating flags.
+The default window is 20 minutes with a hard limit of 21 observations per station. Cached
+duplicates, out-of-order or future reports, last-known snapshots and failed refreshes do not
+add observations. Expired records and stations absent from a later successful snapshot are
+removed. Nothing in this window is persisted.
+
+Movement requires at least three usable reports spanning five minutes, with the newest no
+more than five minutes old. Counts must remain within capacity and the required operation
+must remain available. A large jump of at least eight units and 35% of capacity resets the
+trend as probable rebalancing. When movement is unavailable or inconsistent, eligibility and
+the baseline outlook are unchanged.
+
 ## Weather and outlook output
 
 Weather is an optional hourly regional forecast, not an observation at the station. Forecast
@@ -46,5 +61,6 @@ probability percent and wind km/h. Missing, invalid or expired weather is neutra
 withholds an otherwise eligible estimate.
 
 A `StationOutlook` has status `estimated`, `already_empty`, `already_full` or `unavailable`.
-Only `estimated` has a Low/Medium/High risk. No numerical risk probability or accuracy claim
-is returned. Synthetic tests verify rule behavior, not predictive performance.
+Only `estimated` has a Low/Medium/High risk. An estimate may carry its robust movement summary
+and the count of nearby pressured stations. No numerical risk probability or accuracy claim
+is returned. Synthetic tests verify engineering behavior, not forecast quality.

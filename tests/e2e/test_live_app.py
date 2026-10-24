@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import re
 import socket
 import subprocess
 import sys
@@ -78,9 +79,8 @@ def test_live_app_smoke(page: Page, running_app: str, tmp_path: Path) -> None:
     page.set_viewport_size({"width": 1440, "height": 2000})
     page.goto(running_app)
     expect(page.get_by_role("heading", name="BikePulse")).to_be_visible()
-    expect(page.get_by_text("Live feed connected")).to_be_visible()
-    expect(page.get_by_text("Stations on map")).to_be_visible()
-    expect(page.get_by_text("Select a point on the map or search for a station")).to_be_visible()
+    expect(page.get_by_text("Live", exact=True)).to_be_visible()
+    expect(page.get_by_text("Select a station to see availability")).to_be_visible()
 
     # Alpha is positioned at the initial Paris center, so this exercises the
     # real PyDeck selection event rather than reaching into Streamlit state.
@@ -93,23 +93,24 @@ def test_live_app_smoke(page: Page, running_app: str, tmp_path: Path) -> None:
         force=True,
     )
     expect(page.get_by_role("heading", name="Alpha", exact=True)).to_be_visible()
-    expect(page.get_by_role("heading", name="Current availability")).to_be_visible()
-    expect(page.get_by_role("heading", name="Next 30 minutes")).to_be_visible()
-    expect(page.get_by_text("Rule-based estimate — not validated")).to_be_visible()
+    expect(page.get_by_text("Now", exact=True)).to_be_visible()
+    expect(page.get_by_text("+30 min", exact=True)).to_be_visible()
+    expect(page.get_by_text(re.compile("^(Looks stable|May run low)$"))).to_be_visible()
+    expect(page.get_by_text("Rule estimate · not validated")).to_be_visible()
+    expect(page.get_by_text("Weather neutral", exact=True)).to_be_visible()
+    page.get_by_text("How this is estimated", exact=True).click()
     expect(page.get_by_text("Paris weather:")).to_be_visible()
-    expect(page.get_by_text("and weather.")).to_be_visible()
-    page.get_by_text("Why this outlook?", exact=True).click()
     expect(page.get_by_text("This station is in a busy area.")).to_be_visible()
     page.get_by_role("heading", name="BikePulse", exact=True).scroll_into_view_if_needed()
     page.screenshot(
         path=str(tmp_path / "live-bike-outlook.png"), full_page=True, animations="disabled"
     )
 
-    page.get_by_role("radio", name="Open docks").click()
+    page.get_by_role("radio", name="Docks").click()
     expect(page.get_by_role("heading", name="Alpha", exact=True)).to_be_visible()
-    expect(page.get_by_text("risk of no standard docks")).to_be_visible()
+    expect(page.get_by_text(re.compile("^(Space looks stable|Space may tighten)$"))).to_be_visible()
     page.get_by_role("button", name="Refresh data").click()
-    expect(page.get_by_text("Live feed connected")).to_be_visible()
+    expect(page.get_by_text("Live", exact=True)).to_be_visible()
     page.screenshot(
         path=str(tmp_path / "live-dock-outlook.png"), full_page=True, animations="disabled"
     )
@@ -125,12 +126,16 @@ def test_delayed_station_report_keeps_live_prediction(
         page.get_by_role("combobox").click()
         page.get_by_text("Beta · 2", exact=True).click()
         expect(page.get_by_role("heading", name="Beta", exact=True)).to_be_visible()
-        expect(page.get_by_text("High risk of no bikes")).to_be_visible()
-        expect(page.get_by_text("Delayed report")).to_be_visible()
+        expect(page.get_by_text("May run out", exact=True)).to_be_visible()
+        plan_b = page.locator('[class*="st-key-plan_b"]')
+        expect(plan_b.get_by_text("Plan B", exact=True)).to_be_visible()
+        expect(plan_b.get_by_text("Alpha", exact=True)).to_be_visible()
+        page.get_by_role("button", name="Choose this station").click()
+        expect(page.get_by_role("heading", name="Alpha", exact=True)).to_be_visible()
+        page.get_by_text("How this is estimated", exact=True).click()
         expect(page.get_by_text("Paris weather:")).to_be_visible()
-        page.get_by_text("Why this outlook?", exact=True).click()
         expect(page.get_by_text("The station report is delayed")).to_be_visible()
-        expect(page.get_by_text("Live feed connected")).to_be_visible()
+        expect(page.get_by_text("Live", exact=True)).to_be_visible()
         page.screenshot(
             path=str(tmp_path / "live-delayed-station-outlook.png"),
             full_page=True,
@@ -150,10 +155,8 @@ def test_weather_failure_keeps_live_prediction(
         page.get_by_role("combobox").click()
         page.get_by_text("Beta · 2", exact=True).click()
         expect(page.get_by_role("heading", name="Beta", exact=True)).to_be_visible()
-        expect(page.get_by_text("High risk of no bikes")).to_be_visible()
-        expect(
-            page.get_by_text("Weather unavailable — the station estimate still works.")
-        ).to_be_visible()
+        expect(page.get_by_text("May run out", exact=True)).to_be_visible()
+        expect(page.get_by_text("Weather not included", exact=True)).to_be_visible()
         page.screenshot(
             path=str(tmp_path / "live-weather-fallback.png"),
             full_page=True,

@@ -50,12 +50,21 @@ BUSY_ZONES = (
 )
 
 
-def distance_metres(latitude: float, longitude: float, zone: BusyZone) -> float:
-    lat1, lat2 = radians(latitude), radians(zone.latitude)
+def coordinate_distance_metres(
+    latitude: float,
+    longitude: float,
+    target_latitude: float,
+    target_longitude: float,
+) -> float:
+    lat1, lat2 = radians(latitude), radians(target_latitude)
     dlat = lat2 - lat1
-    dlon = radians(zone.longitude - longitude)
+    dlon = radians(target_longitude - longitude)
     haversine = sin(dlat / 2) ** 2 + cos(lat1) * cos(lat2) * sin(dlon / 2) ** 2
     return 2 * EARTH_RADIUS_METRES * asin(sqrt(min(1.0, max(0.0, haversine))))
+
+
+def distance_metres(latitude: float, longitude: float, zone: BusyZone) -> float:
+    return coordinate_distance_metres(latitude, longitude, zone.latitude, zone.longitude)
 
 
 def matching_zones(

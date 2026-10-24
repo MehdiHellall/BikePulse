@@ -1,4 +1,4 @@
-# Prediction rules — version 4
+# Prediction rules — version 5
 
 The station card estimates risk of no bikes or no standard docks over the next 30 minutes.
 It displays **Rule-based estimate — not validated**. These are explicit product assumptions,
@@ -22,19 +22,52 @@ remain no more than five minutes old.
 | 1–3 available | Always High, regardless of context. |
 | Otherwise ≤6 available or inventory/capacity ≤20% | Start with 2 points. |
 | Otherwise | Start with 0 points. |
+| At least two pressured stations within 500 m | Add 1 point, once. |
 | Inside one or more configured busy zones | Add 1 point, once. |
 | Forecast target in a configured peak period | Add 1 point. |
+| Consistent recent movement projects 0–3 available | Add 4 points and require High. |
+| Consistent falling movement projects ≤6 or ≤20% available | Add 3 points. |
+| Other consistent falling movement | Add 2 points. |
+| Consistent rising movement | Subtract 3 points, stopping at zero. |
+| Stable, mixed or unavailable movement | No movement adjustment. |
 | Rain probability ≥60%, wind ≥30 km/h, temperature <5°C or >30°C | Subtract 1 point, once. |
 | Missing, invalid or expired weather | No weather adjustment; keep the station estimate. |
 
-Clamp points to zero. 0–1 is Low, 2–3 Medium, 4+ High. The 1–3 override always takes priority.
-For example, 6 bikes in a busy area at peak time gives High; poor riding weather reduces that
-to Medium. Three bikes remain High in every context. Ten of 50 docks starts with 2 points
-because it is exactly 20% of capacity. Overlapping zones never multiply pressure.
+Apply current inventory, nearby pressure, area and time before the movement adjustment, then
+apply weather. Clamp points to zero. 0–1 is Low, 2–3 Medium, 4+ High. The current 1–3 override
+and a movement projection of 0–3 always require High, regardless of later adjustments. Ten of
+50 docks starts with 2 points because it is exactly 20% of capacity. Overlapping zones and
+multiple nearby stations never multiply their respective adjustments.
 
-Busy areas and peak periods use the same turnover adjustment for both bike and dock modes.
-This does not model net flows, returns, departures, rebalancing, holidays or special events.
-Low risk is not an assurance that inventory will remain available.
+Nearby pressure means at least two usable stations within 500 metres have 0–3 available or
+no more than 20% of capacity in the selected mode. Bike pressure checks bikes and rental
+operation; dock pressure checks standard docks and return operation. Stale, invalid and
+inactive neighbors are ignored.
+
+Busy areas and peak periods remain nondirectional activity assumptions. Recent bikes and
+recent docks are analyzed independently, so their directional adjustments can oppose one
+another. Low risk is not an assurance that inventory will remain available.
+
+## Recent movement
+
+The live service retains only the latest 20 minutes and at most 21 observations per station.
+Observations are keyed and ordered by the individual station-report timestamp. Cached
+duplicates, out-of-order reports, future reports, failed refreshes and last-known snapshots
+do not extend the window. The window is in memory only and disappears on process restart.
+
+A usable trend needs at least three operating reports spanning five minutes, with the newest
+report no more than five minutes old. The calculation uses all pairwise inventory slopes and
+takes a median weighted toward pairs ending more recently. This limits the effect of a single
+noisy count while giving recent movement greater influence. At least 60% of recency-weighted
+consecutive movement must agree on rising, falling or stable direction; otherwise movement is
+mixed and neutral.
+
+A change is treated as probable rebalancing when it is both at least eight units and at least
+35% of station capacity. Reports before the latest such jump are excluded. Capacity changes
+and unavailable required operations also reset the usable sequence. The 30-minute movement
+projection is always clamped between zero and station capacity. If movement cannot be trusted,
+the baseline inventory, network, area, time and weather rules still return the outlook; there
+is no separate warm-up status.
 
 ## Time
 
