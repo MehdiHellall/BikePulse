@@ -148,7 +148,7 @@ def _render_controls(snapshot: StationMapSnapshot) -> tuple[AvailabilityMode, bo
 
     def station_label(station_id: str) -> str:
         if not station_id:
-            return "Station name or ID"
+            return "Find a station by name or ID"
         station = station_by_id[station_id]
         return f"{station.name} · {station.station_id}"
 
@@ -475,7 +475,8 @@ def _render_station_strip(
         f"{html.escape(station.name)}"
         "</h2><p>Station "
         f"{html.escape(station.station_id)} · {html.escape(view.label)} · "
-        f"{_age_text(view.age_seconds)}</p></div>"
+        f"{_age_text(view.age_seconds)} · Reported {_local_time(station.station_last_reported_utc)}"
+        "</p></div>"
         "<div class='atlas-secondary-stock'><span>"
         f"{secondary_label}</span><strong>{secondary_value}</strong></div>"
         "</header>"
