@@ -58,3 +58,26 @@ needed for the complete gate; report unavailable checks instead of weakening the
 preserving the locked virtual environment and local tooling.
 
 UI screenshots under `docs/assets/` use controlled synthetic station and weather fixtures.
+
+### Dependency security: filelock
+
+The 2026-11-18 audit found 13 advisories against locked `filelock 4.0.12`. Its original
+dependency chain was `bikepulse[dev] -> pip-audit 2.10.1 -> cachecontrol[filecache] 0.14.4
+-> filelock`. It belongs to development audit tooling; neither the application's runtime
+dependency closure nor the Hatchling build backend requires it. A deployment that installs
+the project without the `dev` extra does not install this chain.
+
+The [4.2.1 security release](https://github.com/tox-dev/filelock/releases/tag/4.2.1)
+fixes all 13 reported advisories. For example,
+[CVE-2026-112909](https://github.com/tox-dev/filelock/security/advisories/GHSA-69hj-f68j-2879)
+affects Unix file locks when another local user can place a victim's regular file at the
+lock path. Package presence does not establish exploitability: the reviewed `pip-audit
+2.10.1` cache writer (`_SafeFileCache._set_impl`) uses a temporary file and atomic replacement
+instead of acquiring a file lock.
+
+We nevertheless add `filelock>=4.2.1` explicitly to the `dev` extra so both pip and uv retain
+the security floor, rather than suppressing findings or adding audit tooling to production
+requirements. CacheControl's `filelock>=3.8.0` requirement permits this floor. A targeted
+`uv lock --upgrade-package filelock` selected `4.2.12`, without upgrading unrelated packages.
+After changing a security floor, synchronize with `make setup` and run `make verify`,
+including the audit, source/wheel builds and controlled-fixture browser tests.

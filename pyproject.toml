@@ -18,6 +18,8 @@ dependencies = [
 [project.optional-dependencies]
 dev = [
   "build>=1.2",
+  # Security floor for pip-audit -> cachecontrol[filecache]; see docs/operations.md.
+  "filelock>=4.2.1",
   "hatchling>=1.25",
   "mypy>=1.11",
   "pip-audit>=2.7",
