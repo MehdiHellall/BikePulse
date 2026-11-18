@@ -1,5 +1,7 @@
 # BikePulse
 
+**Live app:** [Try BikePulse](https://bikepulse.streamlit.app/)
+
 BikePulse displays live Vélib’ station availability across Greater Paris and an
 explainable, rule-based outlook for the next 30 minutes.
 
