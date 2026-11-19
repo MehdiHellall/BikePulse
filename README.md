@@ -1,23 +1,96 @@
 # BikePulse
 
-**Live app:** [Try BikePulse](https://bikepulse.streamlit.app/)
+## Problem
 
-BikePulse displays live Vélib’ station availability across Greater Paris and an
-explainable, rule-based outlook for the next 30 minutes.
+A Vélib’ station with bikes or open docks now may be empty or full by the time a rider arrives.
+BikePulse combines live availability across Greater Paris with an explainable, rule-based
+outlook for the next 30 minutes. Search for a station or select it on the map, switch between
+bikes and docks, and see a nearby alternative when the selected station may run out or fill up.
 
-Search for a station or select it on the map. Switch between available bikes and
-open docks. Station details show current inventory and a Low, Medium or High risk
-of running out, based on inventory, recent live movement, nearby station pressure,
-configured busy areas, local time and Paris-area weather when available. These estimates
-are **not validated** and do not represent probabilities.
+## Live demo
 
-When the selected station may run out or fill up, BikePulse offers the closest safer
-station within two kilometres as a Plan B. The map connects the two stations and the
-recommendation shows straight-line distance, current inventory and its own outlook.
+**[Open BikePulse](https://bikepulse.streamlit.app/)**
+
+The live app uses the public Vélib’ GBFS feeds. Its station map refreshes every minute while
+open; the **Refresh data** control requests a new status snapshot immediately.
+
+## Screenshot
+
+![BikePulse desktop view with current bike inventory, a 30-minute outlook and a nearby Plan B station](docs/design/paris-atlas/evidence-layout-final/page-Selected-1440x900.png)
+
+*Desktop view at 1440 × 900. This capture uses controlled, synthetic two-station feed and
+weather fixtures; the live demo loads current public data.*
+
+## Architecture
+
+```text
+Vélib’ GBFS feeds → validated live snapshot → map and station availability
+                                      └──────→ eligibility + rule-based outlook
+Open-Meteo hourly forecast ──────────────────→ optional weather adjustment
+```
+
+| Package | Responsibility |
+| --- | --- |
+| `feeds/` | Fetch GBFS data and validate records individually. |
+| `app/` | Keep the latest snapshot and bounded observations in memory; render the Streamlit map and station decision. |
+| `prediction/` | Calculate movement and a 30-minute outlook with pure, versioned rules; provide regional weather. |
+| `config/` | Load typed TOML settings and reject unknown options. |
+
+The app has one live availability page. The [architecture guide](docs/architecture.md) traces
+the request flow and interfaces; the [data contract](docs/data-contract.md) defines feed
+validation and freshness.
+
+## Engineering decisions
+
+- **Preserve uncertainty.** Missing counts remain unknown. Feed receipt, publication,
+  station-report and weather-valid times stay distinct. Delayed reports are labeled; stale
+  reports and last-known snapshots do not receive an outlook.
+- **Make the estimate inspectable.** Current inventory, recent movement, nearby station
+  pressure, configured areas, local time and eligible weather feed explicit
+  [prediction rules](docs/prediction-rules.md). Suspected rebalancing jumps are excluded.
+  One to three available bikes or docks always gives High risk; an already empty or full
+  station shows its current state. Both modes use the same turnover assumptions.
+- **Degrade visibly.** A failed feed refresh retains labeled last-known availability and
+  withholds the outlook. Missing or failed weather is shown as neutral and leaves an
+  otherwise eligible estimate available, with a retry cooldown.
+- **Bound live state.** Status, station information and weather are cached in memory for
+  60 seconds, 24 hours and 15 minutes respectively. Recent movement uses at most 21 distinct
+  reports per station from the last 20 minutes; nothing is persisted.
+- **Keep the alternative honest.** Plan B requires at least four bikes or docks, a safer
+  usable outlook and a station within two kilometres. Its distance is straight-line.
+
+### Mobile view
+
+The same current-inventory → outlook → Plan B sequence fits a 390 × 844 phone viewport.
+
+![BikePulse mobile view showing current bikes, the 30-minute outlook and Plan B](docs/design/paris-atlas/evidence-layout-final/page-Selected-390x844.png)
+
+*Controlled synthetic fixtures, matching the desktop capture.*
+
+## Testing
+
+`make verify` runs Ruff formatting and lint, strict mypy, pytest with an 80% coverage gate,
+a dependency audit, source and wheel builds, and Playwright browser smoke tests. Browser
+checks exercise the map, bike and dock modes, refresh, Plan B, delayed station reports and
+weather failure. Tests use controlled local feed and weather fixtures, never public APIs.
+
+Use `make check` for the checks without the browser stage, or `make smoke` for the browser
+stage alone. See [operations](docs/operations.md) for the full verification requirements.
+
+## Limitations
+
+- The outlook is an **unvalidated rule estimate**, not a probability or measured accuracy
+  claim. Low risk does not guarantee availability.
+- Weather is one hourly [Open-Meteo](https://open-meteo.com/en/docs) forecast at the Paris map
+  center, not a station-level observation. A weather failure has no effect on the rule score.
+  Weather data is attributed under CC BY 4.0.
+- Plan B is a nearby alternative, not a walking or cycling route.
+- Missing or stale station data can withhold an outlook. Recent observations disappear on
+  process restart; BikePulse stores no feed, weather or prediction history.
 
 ## Run locally
 
-Use Python 3.12, then run:
+Use Python 3.12 and the locked environment:
 
 ```bash
 make setup
@@ -25,58 +98,9 @@ make run
 ```
 
 Setup installs local tooling under `.tools/` and synchronizes `.venv` from `uv.lock`.
-The default configuration is `config.example.toml`. Choose another configuration with
+The default settings are in `config.example.toml`; select another TOML file with
 `BIKEPULSE_CONFIG=/path/to/config.toml make run`.
 
-The map refreshes every minute while open. Station information is cached for 24 hours,
-status for 60 seconds and weather for 15 minutes, all in memory. A failed status refresh
-shows clearly marked last-known availability and withholds the outlook. A weather failure
-does not withhold the station estimate. The app does not persist feed, weather or prediction
-history. It retains at most 21 distinct reports per station from the last 20 minutes in
-memory, solely to measure recent movement; the window is discarded on restart.
-
-Individual station reports are labeled delayed after one hour but remain usable for up to
-two hours. Older reports are marked stale and do not receive a prediction.
-
-## Deploy on Streamlit Community Cloud
-
-Create a Community Cloud app from this repository with `streamlit_app.py` as the main
-file and Python 3.12 as the runtime. The checked-in `requirements.txt` installs the
-project from its `src/` layout; no secrets or database are required. The default
-configuration uses the public Vélib GBFS feeds and Open-Meteo. If you need a different
-configuration, add a TOML file to the repository and set the `BIKEPULSE_CONFIG` environment
-variable in the app's Advanced settings to its repository-relative path.
-
-## Rules and limitations
-
-Critically low current inventory dominates the outlook: 1–3 bikes or docks always gives
-High risk. A robust recent trend is the strongest contextual adjustment and is calculated
-independently for bikes and docks. Concentrated pressure at nearby stations, busy areas and
-peak periods can increase risk; poor riding weather may reduce it. Suspected rebalancing
-jumps are excluded. If recent movement cannot be trusted, the existing live context still
-produces an outlook without a separate warm-up state.
-
-Plan B requires at least four bikes or docks, a usable outlook that is safer than the
-selected station, and a straight-line distance of no more than two kilometres. It is a
-nearby alternative, not a walking or cycling route.
-
-[Prediction rules](docs/prediction-rules.md) documents every threshold, geographic zone,
-time boundary and fallback. Missing availability stays unknown. Already empty or full
-stations display their current state rather than a future-risk category.
-
-Weather comes from [Open-Meteo](https://open-meteo.com/en/docs), with CC BY 4.0 attribution.
-One forecast at the Paris map center is shared across the region and is never required for
-an estimate.
-
-## Development
-
-```bash
-make verify
-```
-
-Verification runs Ruff formatting/lint, strict mypy, tests with at least 80% coverage,
-a dependency audit, package builds and Playwright browser smoke tests. Tests use controlled
-local feed fixtures. `make clean` removes disposable caches and build output,
-preserving `.venv/`, `.tools/` and the source tree.
-
-See the [documentation index](docs/README.md) for architecture, feed contracts and operations.
+For Streamlit Community Cloud, use `streamlit_app.py` as the main file and Python 3.12 as
+the runtime. The default configuration needs no secrets or database. Deployment and
+troubleshooting details are in [operations](docs/operations.md).
